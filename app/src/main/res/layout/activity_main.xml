@@ -126,8 +126,9 @@
                         android:textAllCaps="false"
                         android:textSize="15sp"
                         android:textStyle="bold"
-                        android:textColor="@color/black"
-                        app:backgroundTint="@color/white"
+                        android:textColor="@color/white"
+                        app:backgroundTint="@color/primaryDark"
+                        app:strokeWidth="0dp"
                         app:cornerRadius="18dp"
                         app:elevation="1dp" />
 
@@ -300,6 +301,9 @@
         android:id="@+id/adContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:minHeight="60dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
         android:gravity="center" />
 
     <TextView

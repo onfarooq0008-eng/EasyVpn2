@@ -26,11 +26,11 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          # Pinned to Gradle 8.14.4 to avoid the Kotlin Gradle version deprecation warning.
+          # Pinned to a version known to work with AGP 8.13.2 + Kotlin 2.4.0 below.
           # Without this, the action grabs the newest Gradle release, which can be
           # ahead of what our Android/Kotlin plugin versions support and breaks
           # the build in confusing ways (e.g. "unresolved reference: let").
-          gradle-version: '8.14.4'
+          gradle-version: '8.13'
 
       - name: Run unit tests
         run: gradle testDebugUnitTest
