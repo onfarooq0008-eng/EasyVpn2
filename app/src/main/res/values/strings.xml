@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">EasyVPN</string>
-    <string name="version_footer">v1.0.0 — Fast &amp; Secure VPN</string>
+    <string name="app_name">Fast VPN – Secure &amp; Private</string>
+    <string name="version_footer">v1.0.0 — Fast VPN – Secure &amp; Private</string>
 </resources>

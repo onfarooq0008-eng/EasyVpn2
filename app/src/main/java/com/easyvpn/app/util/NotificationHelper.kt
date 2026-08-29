@@ -43,7 +43,7 @@ object NotificationHelper {
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_vpn_status)
-            .setContentTitle("EasyVPN — Connected")
+            .setContentTitle("Fast VPN – Secure & Private — Connected")
             .setContentText(serverLabel)
             .setContentIntent(openAppIntent)
             .setOngoing(true)

@@ -12,7 +12,7 @@
         android:layout_height="?attr/actionBarSize"
         android:background="@color/background"
         android:elevation="0dp"
-        android:title="EasyVPN"
+        android:title="@string/app_name"
         android:titleTextColor="@color/black"
         android:titleTextAppearance="@style/TextAppearance.EasyVPN.Toolbar"
         app:navigationIconTint="@color/black" />
@@ -312,7 +312,7 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:padding="9dp"
-        android:text="v1.0.0 • Fast &amp; Secure VPN"
+        android:text="@string/version_footer"
         android:textColor="@color/gray"
         android:textSize="10sp" />
 </LinearLayout>
