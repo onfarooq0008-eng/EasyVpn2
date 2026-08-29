@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/background"
+    android:clipToPadding="false">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="16dp"
+        android:paddingTop="20dp"
+        android:paddingBottom="36dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Settings"
+            android:textColor="@color/black"
+            android:textSize="30sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Customize your EasyVPN experience"
+            android:textColor="@color/gray"
+            android:textSize="13sp" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="22dp"
+            app:cardBackgroundColor="@color/cardBackground"
+            app:cardCornerRadius="22dp"
+            app:cardElevation="1dp"
+            app:strokeColor="@color/divider"
+            app:strokeWidth="1dp">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Connection" android:textColor="@color/primary" android:textSize="12sp" android:textStyle="bold" android:letterSpacing="0.08" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="14dp" android:paddingBottom="8dp">
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Auto-connect" android:textColor="@color/black" android:textStyle="bold" android:textSize="15sp" />
+                        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="Reconnect to your last server when EasyVPN opens" android:textColor="@color/gray" android:textSize="12sp" />
+                    </LinearLayout>
+                    <Switch android:id="@+id/switchAutoConnect" android:layout_width="wrap_content" android:layout_height="wrap_content" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp"
+            app:cardBackgroundColor="@color/cardBackground" app:cardCornerRadius="22dp" app:cardElevation="1dp" app:strokeColor="@color/divider" app:strokeWidth="1dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Security" android:textColor="@color/primary" android:textSize="12sp" android:textStyle="bold" android:letterSpacing="0.08" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:text="Kill switch" android:textColor="@color/black" android:textStyle="bold" android:textSize="15sp" />
+                <TextView android:id="@+id/textKillSwitchDesc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="Enable Android's “Block connections without VPN” option to prevent traffic from bypassing EasyVPN." android:textColor="@color/gray" android:textSize="12sp" />
+                <com.google.android.material.button.MaterialButton android:id="@+id/buttonSystemVpnSettings" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="12dp" android:text="Open VPN settings" android:textAllCaps="false" app:cornerRadius="15dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp"
+            app:cardBackgroundColor="@color/cardBackground" app:cardCornerRadius="22dp" app:cardElevation="1dp" app:strokeColor="@color/divider" app:strokeWidth="1dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Appearance" android:textColor="@color/primary" android:textSize="12sp" android:textStyle="bold" android:letterSpacing="0.08" />
+                <RadioGroup android:id="@+id/radioGroupTheme" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:layout_marginTop="10dp">
+                    <RadioButton android:id="@+id/radioThemeSystem" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="System" />
+                    <RadioButton android:id="@+id/radioThemeLight" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Light" />
+                    <RadioButton android:id="@+id/radioThemeDark" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Dark" />
+                </RadioGroup>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp"
+            app:cardBackgroundColor="@color/cardBackground" app:cardCornerRadius="22dp" app:cardElevation="1dp" app:strokeColor="@color/divider" app:strokeWidth="1dp">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="16dp">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="DNS" android:textColor="@color/primary" android:textSize="12sp" android:textStyle="bold" android:letterSpacing="0.08" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="Choose the resolver used inside the VPN tunnel." android:textColor="@color/gray" android:textSize="12sp" />
+                <RadioGroup android:id="@+id/radioGroupDns" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="8dp">
+                    <RadioButton android:id="@+id/radioDnsServer" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Server default" />
+                    <RadioButton android:id="@+id/radioDnsGoogle" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Google  •  8.8.8.8" />
+                    <RadioButton android:id="@+id/radioDnsCloudflare" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Cloudflare  •  1.1.1.1" />
+                    <RadioButton android:id="@+id/radioDnsAdblock" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="AdGuard  •  Ad blocking" />
+                    <RadioButton android:id="@+id/radioDnsCustom" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Custom" />
+                </RadioGroup>
+                <LinearLayout android:id="@+id/layoutCustomDns" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="4dp" android:visibility="gone">
+                    <EditText android:id="@+id/editCustomDns" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:hint="9.9.9.9, 149.112.112.112" android:inputType="text" android:maxLines="1" />
+                    <com.google.android.material.button.MaterialButton android:id="@+id/buttonSaveCustomDns" android:layout_width="wrap_content" android:layout_height="48dp" android:layout_marginStart="8dp" android:text="Save" android:textAllCaps="false" app:cornerRadius="14dp" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.button.MaterialButton android:id="@+id/buttonSplitTunneling" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="16dp" android:text="Split tunneling  •  Choose apps" android:textAllCaps="false" style="@style/Widget.MaterialComponents.Button.OutlinedButton" app:cornerRadius="16dp" />
+        <com.google.android.material.button.MaterialButton android:id="@+id/buttonDiagnostics" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="8dp" android:text="Connection diagnostics" android:textAllCaps="false" style="@style/Widget.MaterialComponents.Button.OutlinedButton" app:cornerRadius="16dp" />
+    </LinearLayout>
+</ScrollView>

@@ -1,0 +1,176 @@
+// Tiny file-backed store -- no database server to install or manage. The
+// allocator below uses a process-wide async mutex plus persisted reservations
+// so concurrent registration requests cannot receive the same WireGuard IP.
+const fs = require('fs');
+const crypto = require('crypto');
+const path = require('path');
+
+const DATA_DIR = path.join(__dirname, 'data');
+const STORE_PATH = path.join(DATA_DIR, 'store.json');
+
+// Node's event loop can interleave async requests between load() and save().
+// Keep all allocation mutations in one critical section. The API is a single
+// Node process, so this protects concurrent HTTP requests without a database.
+let mutationQueue = Promise.resolve();
+
+function withMutationLock(fn) {
+  const run = mutationQueue.then(fn, fn);
+  mutationQueue = run.catch(() => {});
+  return run;
+}
+
+function load() {
+  if (!fs.existsSync(STORE_PATH)) {
+    return { registrations: {}, ipCounters: {}, reservations: {} };
+  }
+  const store = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
+  // Backward compatibility with stores created by older EasyVPN versions.
+  store.registrations ||= {};
+  store.ipCounters ||= {};
+  store.reservations ||= {};
+  return store;
+}
+
+function save(store) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const tmpPath = `${STORE_PATH}.tmp`;
+  fs.writeFileSync(tmpPath, JSON.stringify(store, null, 2));
+  fs.renameSync(tmpPath, STORE_PATH); // atomic on the same filesystem
+}
+
+/** Registration key is scoped to (devicePublicKey, serverId) -- the same
+ *  device gets a fresh, independent registration on each server it uses. */
+function registrationKey(devicePublicKey, serverId) {
+  return `${devicePublicKey}::${serverId}`;
+}
+
+function getRegistration(devicePublicKey, serverId) {
+  const store = load();
+  return store.registrations[registrationKey(devicePublicKey, serverId)] || null;
+}
+
+/**
+ * Atomically reserves the next WireGuard host address for a device/server.
+ *
+ * Why this exists instead of a simple allocateAddress(): two HTTP requests can
+ * otherwise both execute load() before either executes save(), read the same
+ * counter, and assign the same IP. Reservations are persisted so the address
+ * remains taken while the API is waiting for the VPS agent to add the peer.
+ *
+ * Returns { assignedAddress, created } where created is true only for the
+ * request that created the reservation. A repeated concurrent request gets
+ * the same reservation and must not release it if its own agent call fails.
+ */
+async function reserveAddress(devicePublicKey, serverId, subnetBase, maxRegistrations = Infinity) {
+  return withMutationLock(() => {
+    const store = load();
+    const key = registrationKey(devicePublicKey, serverId);
+
+    const existing = store.registrations[key];
+    if (existing) {
+      return { assignedAddress: existing.assignedAddress, token: existing.registrationToken, created: false, existing: true };
+    }
+
+    const reservation = store.reservations[key];
+    if (reservation) {
+      return { assignedAddress: reservation.assignedAddress, token: reservation.registrationToken, created: false, existing: false };
+    }
+
+    const registrationCount = Object.values(store.registrations)
+      .filter((reg) => reg.serverId === serverId).length;
+    const reservationCount = Object.values(store.reservations)
+      .filter((res) => res.serverId === serverId).length;
+
+    if (registrationCount + reservationCount >= maxRegistrations) {
+      throw new Error(`Server ${serverId} has reached its registration capacity`);
+    }
+
+    const next = store.ipCounters[serverId] || 2;
+    if (next > 254) {
+      throw new Error(`Server ${serverId} has run out of addresses in its /24 subnet`);
+    }
+
+    const assignedAddress = `${subnetBase}.${next}`;
+    store.ipCounters[serverId] = next + 1;
+    store.reservations[key] = {
+      serverId,
+      assignedAddress,
+      registrationToken: crypto.randomBytes(32).toString('hex'),
+      createdAt: new Date().toISOString(),
+    };
+    save(store);
+
+    return { assignedAddress, token: store.reservations[key].registrationToken, created: true, existing: false };
+  });
+}
+
+/** Release only a reservation created for this exact registration key. */
+async function releaseReservation(devicePublicKey, serverId) {
+  return withMutationLock(() => {
+    const store = load();
+    const key = registrationKey(devicePublicKey, serverId);
+    if (!store.reservations[key]) return false;
+    delete store.reservations[key];
+    save(store);
+    return true;
+  });
+}
+
+/**
+ * Finalizes a reservation after the VPS agent has successfully installed the
+ * peer. Registration and reservation removal happen in one locked write.
+ */
+async function saveRegistration(devicePublicKey, serverId, assignedAddress, registrationToken) {
+  return withMutationLock(() => {
+    const store = load();
+    const key = registrationKey(devicePublicKey, serverId);
+    const existing = store.registrations[key];
+    if (existing) return existing;
+
+    store.registrations[key] = {
+      serverId,
+      assignedAddress,
+      registrationToken,
+      createdAt: new Date().toISOString(),
+    };
+    delete store.reservations[key];
+    save(store);
+    return store.registrations[key];
+  });
+}
+
+/** Counts how many devices are registered on each server, plus the total. */
+function registrationCounts() {
+  const store = load();
+  const byServer = {};
+  let total = 0;
+  for (const reg of Object.values(store.registrations)) {
+    byServer[reg.serverId] = (byServer[reg.serverId] || 0) + 1;
+    total += 1;
+  }
+  return { byServer, total };
+}
+
+/** Remove a completed registration atomically. */
+async function removeRegistration(devicePublicKey, serverId, registrationToken) {
+  return withMutationLock(() => {
+    const store = load();
+    const key = registrationKey(devicePublicKey, serverId);
+    const existing = store.registrations[key];
+    if (!existing || typeof existing.registrationToken !== 'string' || existing.registrationToken !== registrationToken) return false;
+    const existed = true;
+    delete store.registrations[key];
+    delete store.reservations[key];
+    if (existed) save(store);
+    return existed;
+  });
+}
+
+module.exports = {
+  getRegistration,
+  reserveAddress,
+  releaseReservation,
+  saveRegistration,
+  registrationCounts,
+  removeRegistration,
+};

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#4D8DFF</color>
+    <color name="primaryDark">#163A78</color>
+    <color name="accent">#35D98B</color>
+    <color name="background">#0B1220</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#F4F7FB</color>
+    <color name="gray">#9AA9BF</color>
+    <color name="cardBackground">#121C2D</color>
+    <color name="rowBackground">#172235</color>
+    <color name="searchBorder">#26364D</color>
+    <color name="searchBackground">#121C2D</color>
+    <color name="statusOnline">#45D48B</color>
+    <color name="statusOffline">#FF7373</color>
+    <color name="statusChecking">#9AA9BF</color>
+    <color name="danger">#FF6262</color>
+    <color name="heroStart">#102D67</color>
+    <color name="heroEnd">#1B5CC5</color>
+    <color name="iconCircle">#1A3154</color>
+    <color name="onlinePill">#173B2A</color>
+    <color name="divider">#24334A</color>
+    <color name="mutedOnPrimary">#CFE1FF</color>
+</resources>
