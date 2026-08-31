@@ -15,12 +15,17 @@ import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
 import com.google.android.gms.ads.interstitial.InterstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
+import com.google.android.gms.ads.nativead.NativeAd
+import com.google.android.gms.ads.nativead.NativeAdOptions
 
-/** Centralized AdMob manager. Uses Google's official test IDs until release IDs are supplied. */
+/** Centralized AdMob manager for all ad formats used in the app. */
 object AdManager {
     private const val TAG = "EasyVPN-AdMob"
-    private const val BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/6300978111"
-    private const val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3940256099942544/1033173712"
+
+    private const val BANNER_AD_UNIT_ID = "ca-app-pub-3171485884518174/8991004479"
+    private const val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-3171485884518174/5968772815"
+    private const val NATIVE_AD_UNIT_ID = "ca-app-pub-3171485884518174/3342609470"
+    const val APP_OPEN_AD_UNIT_ID = "ca-app-pub-3171485884518174/1454812730"
 
     @Volatile private var initialized = false
     @Volatile private var initStarted = false
@@ -35,9 +40,12 @@ object AdManager {
                 initialized = true
                 Log.d(TAG, "Mobile Ads initialized: $status")
                 preloadInterstitial(context.applicationContext)
+                AppOpenAdManager.loadAd(context.applicationContext)
             }
         }
     }
+
+    // ---------------- Banner ----------------
 
     fun loadBanner(container: FrameLayout, activity: Activity) {
         init(activity)
@@ -60,6 +68,8 @@ object AdManager {
         container.addView(adView)
         adView.post { adView.loadAd(AdRequest.Builder().build()) }
     }
+
+    // ---------------- Interstitial ----------------
 
     fun preloadInterstitial(context: Context) {
         InterstitialAd.load(
@@ -100,5 +110,26 @@ object AdManager {
             }
         }
         ad.show(activity)
+    }
+
+    // ---------------- Native ----------------
+
+    /**
+     * Loads a single native ad and hands it back via [onLoaded]. Caller owns the returned
+     * [NativeAd] and is responsible for calling [NativeAd.destroy] once the view showing it
+     * is recycled/torn down (see HomeListAdapter's native ad view holder).
+     */
+    fun loadNativeAd(context: Context, onLoaded: (NativeAd) -> Unit, onFailed: (() -> Unit)? = null) {
+        val loader = com.google.android.gms.ads.AdLoader.Builder(context.applicationContext, NATIVE_AD_UNIT_ID)
+            .forNativeAd { nativeAd -> onLoaded(nativeAd) }
+            .withAdListener(object : AdListener() {
+                override fun onAdFailedToLoad(error: LoadAdError) {
+                    Log.e(TAG, "Native ad failed: code=${error.code}, domain=${error.domain}, message=${error.message}")
+                    onFailed?.invoke()
+                }
+            })
+            .withNativeAdOptions(NativeAdOptions.Builder().build())
+            .build()
+        loader.loadAd(AdRequest.Builder().build())
     }
 }

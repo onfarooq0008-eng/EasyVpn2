@@ -155,6 +155,11 @@ class MainActivity : AppCompatActivity() {
         return super.onOptionsItemSelected(item)
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        adapter.destroyAds()
+    }
+
     override fun onResume() {
         super.onResume()
 
@@ -220,11 +225,17 @@ class MainActivity : AppCompatActivity() {
         }
         val groups = CountryGroup.groupByCountry(filtered)
         val rows = mutableListOf<HomeRow>()
-        groups.forEach { group ->
+        var nativeAdSlot = 0
+        groups.forEachIndexed { index, group ->
             val expanded = expandedCountryCodes.contains(group.countryCode)
             rows.add(HomeRow.Header(group, expanded))
             if (expanded) {
                 group.servers.forEach { rows.add(HomeRow.ServerRow(it)) }
+            }
+            // One native ad every 4 country rows -- frequent enough to monetize a long
+            // server list, spaced out enough to not feel like it's crowding real results.
+            if ((index + 1) % 4 == 0 && index != groups.lastIndex) {
+                rows.add(HomeRow.NativeAdRow(nativeAdSlot++))
             }
         }
         adapter.submit(rows, connectedServer?.id)

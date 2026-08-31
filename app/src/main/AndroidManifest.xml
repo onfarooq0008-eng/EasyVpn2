@@ -28,10 +28,9 @@
         android:theme="@style/Theme.EasyVPN"
         tools:targetApi="36">
 
-        <!-- TODO: replace with your real AdMob App ID from AdMob console before release -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="ca-app-pub-3171485884518174~1946144621" />
 
         <activity
             android:name=".ui.SplashActivity"
