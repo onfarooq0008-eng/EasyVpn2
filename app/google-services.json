@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1050707990753",
+    "project_id": "fastvpn-5024f",
+    "storage_bucket": "fastvpn-5024f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1050707990753:android:1275772295b3fbcd4b3fa0",
+        "android_client_info": {
+          "package_name": "com.fastvpn.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBStGPKySsvrDmVwgeYK8RuTU_L-qpBIo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

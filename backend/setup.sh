@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# EasyVPN unified setup script. Two modes, same file:
+# FastVPN unified setup script. Two modes, same file:
 #
 #   MODE 1 -- run ONCE, on whichever VPS you want to be the "brain":
 #     sudo bash setup.sh --role api
@@ -74,7 +74,7 @@ if [[ "$ROLE" == "api" ]]; then
   apt-get update -y
   apt-get install -y ufw curl
 
-  INSTALL_DIR="/opt/easyvpn-api"
+  INSTALL_DIR="/opt/fastvpn-api"
   echo "==> Setting up the control API at ${INSTALL_DIR}..."
   mkdir -p "${INSTALL_DIR}/data"
   cp "${SCRIPT_DIR}/api/server.js" "${INSTALL_DIR}/server.js"
@@ -88,9 +88,9 @@ if [[ "$ROLE" == "api" ]]; then
   echo "==> Installing dependencies..."
   npm install --omit=dev --no-audit --no-fund
 
-  cat > /etc/systemd/system/easyvpn-api.service << EOF
+  cat > /etc/systemd/system/fastvpn-api.service << EOF
 [Unit]
-Description=EasyVPN control API
+Description=FastVPN control API
 After=network.target
 
 [Service]
@@ -107,8 +107,8 @@ WantedBy=multi-user.target
 EOF
 
   systemctl daemon-reload
-  systemctl enable easyvpn-api
-  systemctl restart easyvpn-api
+  systemctl enable fastvpn-api
+  systemctl restart fastvpn-api
   sleep 2 # give it a moment to start and generate its admin key on first boot
 
   # Actually verify the service is alive and answering, rather than just
@@ -116,12 +116,12 @@ EOF
   # would otherwise go unnoticed here, since data/admin.config.json can
   # persist from an earlier successful run even while the CURRENT one is
   # broken, which previously made this check falsely report success.
-  if ! systemctl is-active --quiet easyvpn-api; then
+  if ! systemctl is-active --quiet fastvpn-api; then
     echo ""
     echo "############################################################"
-    echo " FAILED: the easyvpn-api service did not start. Recent logs:"
+    echo " FAILED: the fastvpn-api service did not start. Recent logs:"
     echo "############################################################"
-    journalctl -u easyvpn-api --no-pager -n 30
+    journalctl -u fastvpn-api --no-pager -n 30
     exit 1
   fi
   if ! curl -s -f "http://localhost:${API_PORT}/api/health" > /dev/null; then
@@ -130,7 +130,7 @@ EOF
     echo " FAILED: the service is running but isn't answering on port"
     echo " ${API_PORT}. Recent logs:"
     echo "############################################################"
-    journalctl -u easyvpn-api --no-pager -n 30
+    journalctl -u fastvpn-api --no-pager -n 30
     exit 1
   fi
   echo "==> Verified: the API is running and responding."
@@ -248,7 +248,7 @@ systemctl restart wg-quick@${WG_IFACE}
 
 echo "==> Installing the agent (the only thing allowed to add WireGuard peers here)..."
 install_node_runtime
-AGENT_DIR="/opt/easyvpn-agent"
+AGENT_DIR="/opt/fastvpn-agent"
 mkdir -p "${AGENT_DIR}"
 cp "${SCRIPT_DIR}/agent/agent.js" "${AGENT_DIR}/agent.js"
 cp "${SCRIPT_DIR}/agent/package.json" "${AGENT_DIR}/package.json"
@@ -265,9 +265,9 @@ cat > "${AGENT_DIR}/agent.config.json" << EOF
 }
 EOF
 
-cat > /etc/systemd/system/easyvpn-agent.service << EOF
+cat > /etc/systemd/system/fastvpn-agent.service << EOF
 [Unit]
-Description=EasyVPN agent
+Description=FastVPN agent
 After=network.target wg-quick@${WG_IFACE}.service
 
 [Service]
@@ -283,19 +283,19 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable easyvpn-agent
-systemctl restart easyvpn-agent
+systemctl enable fastvpn-agent
+systemctl restart fastvpn-agent
 sleep 1
 
 # Actually verify the agent started, rather than assuming success and only
 # finding out later when registration with the brain fails with a confusing
 # error -- same reasoning as the equivalent check in the api role above.
-if ! systemctl is-active --quiet easyvpn-agent; then
+if ! systemctl is-active --quiet fastvpn-agent; then
   echo ""
   echo "############################################################"
-  echo " FAILED: the easyvpn-agent service did not start. Recent logs:"
+  echo " FAILED: the fastvpn-agent service did not start. Recent logs:"
   echo "############################################################"
-  journalctl -u easyvpn-agent --no-pager -n 30
+  journalctl -u fastvpn-agent --no-pager -n 30
   exit 1
 fi
 if ! curl -s -f "http://localhost:${AGENT_PORT}/health" > /dev/null; then
@@ -304,7 +304,7 @@ if ! curl -s -f "http://localhost:${AGENT_PORT}/health" > /dev/null; then
   echo " FAILED: the agent is running but isn't answering on port"
   echo " ${AGENT_PORT}. Recent logs:"
   echo "############################################################"
-  journalctl -u easyvpn-agent --no-pager -n 30
+  journalctl -u fastvpn-agent --no-pager -n 30
   exit 1
 fi
 echo "==> Verified: the agent is running and responding."
@@ -326,7 +326,7 @@ AGENT_URL="http://${MY_IP}:${AGENT_PORT}"
 DISPLAY_NAME="${SERVER_NAME:-$COUNTRY_NAME}"
 
 echo "==> Registering this VPS with your control API..."
-HTTP_CODE=$(curl -s -o /tmp/easyvpn-register-response.json -w "%{http_code}" \
+HTTP_CODE=$(curl -s -o /tmp/fastvpn-register-response.json -w "%{http_code}" \
   -X POST "${API_URL}/api/admin/add-server" \
   -H "Content-Type: application/json" \
   -H "X-Admin-Key: ${ADMIN_KEY}" \
@@ -355,7 +355,7 @@ else
   echo "============================================================"
   echo " WireGuard + agent are installed and running, but registering"
   echo " with your API FAILED (HTTP ${HTTP_CODE}). Response:"
-  cat /tmp/easyvpn-register-response.json
+  cat /tmp/fastvpn-register-response.json
   echo ""
   echo " Common causes: wrong --api-url, wrong --admin-key, or the API"
   echo " VPS's firewall isn't allowing this connection. Fix the issue and"

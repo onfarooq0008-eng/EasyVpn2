@@ -1,4 +1,4 @@
-# EasyVPN — Android VPN app (WireGuard, self-hosted servers)
+# FastVPN — Android VPN app (WireGuard, self-hosted servers)
 
 A lightweight VPN client for Android that connects to WireGuard servers you run
 yourself, with:
@@ -28,7 +28,7 @@ yourself, with:
 
 1. Install **Android Studio** (Koala or newer) — or use GitHub Codespaces
    from your phone if you don't have a PC.
-2. `File > Open` → select the `EasyVPN` folder. Let Gradle sync.
+2. `File > Open` → select the `FastVPN` folder. Let Gradle sync.
 3. Run on a device/emulator with Play Store services (needed for AdMob).
 
 The CI workflow (`.github/workflows/build.yml`) pins exact Gradle/Kotlin/AGP
@@ -156,7 +156,7 @@ the app process was recreated.
 - [ ] **Sign your release build.** Generate a keystore (from your Codespace
       terminal, since keytool ships with the JDK already installed there):
       ```bash
-      keytool -genkey -v -keystore easyvpn-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias easyvpn
+      keytool -genkey -v -keystore fastvpn-release.jks -keyalg RSA -keysize 2048 -validity 10000 -alias fastvpn
       ```
       Copy `keystore.properties.example` to `keystore.properties`, fill in
       the real values (never commit this file — it's gitignored already).
@@ -180,8 +180,8 @@ the app process was recreated.
 ## 10. Project structure
 
 ```
-EasyVPN/
-  app/src/main/java/com/easyvpn/app/
+FastVPN/
+  app/src/main/java/com/fastvpn/app/
     data/         Server model, local repo, ServerSource (local vs backend),
                    BackendApiClient, app settings
     vpn/          WireGuard tunnel manager, notification action receiver

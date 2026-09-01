@@ -2,5 +2,5 @@
 -keep class com.wireguard.** { *; }
 -keepclassmembers class com.wireguard.** { *; }
 # Gson models
--keep class com.easyvpn.app.data.** { *; }
+-keep class com.fastvpn.app.data.** { *; }
 -keepattributes Signature

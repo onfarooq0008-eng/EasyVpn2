@@ -14,7 +14,7 @@
         android:elevation="0dp"
         android:title="@string/app_name"
         android:titleTextColor="@color/black"
-        android:titleTextAppearance="@style/TextAppearance.EasyVPN.Toolbar"
+        android:titleTextAppearance="@style/TextAppearance.FastVPN.Toolbar"
         app:navigationIconTint="@color/black" />
 
     <androidx.core.widget.NestedScrollView

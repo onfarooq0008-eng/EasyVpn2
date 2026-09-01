@@ -1,4 +1,4 @@
-# EasyVPN backend — automatic device registration
+# FastVPN backend — automatic device registration
 
 This replaces manually running `add-client.sh` for every user, and it's set
 up with **one script, run once per VPS** — nothing to edit by hand, nothing
@@ -150,11 +150,60 @@ of the raw IP.
 
 ---
 
+## Firebase: HTTPS that hides your VPS IP, real dashboard login, and app push
+
+Optional, and separate from the Caddy option above — pick whichever fits.
+Firebase Hosting can't proxy an arbitrary IP directly, so this uses a small
+Cloud Run proxy in between; your brain VPS backend itself is unchanged.
+
+**1. Create the Firebase project**
+- [Firebase Console](https://console.firebase.google.com) → Add project (this
+  also creates a matching Google Cloud project, which is what Cloud Run
+  deploys into).
+- Authentication → Sign-in method → enable **Google**.
+- Project settings → Your apps → add a **Web app** → copy the `firebaseConfig`
+  object into `backend/api/public/dashboard.html` (it's public info, not a
+  secret — access is enforced by the email allowlist below, not by hiding it).
+- Project settings → Service accounts → Generate new private key → save the
+  file as `backend/api/data/firebase-service-account.json`.
+
+**2. Hide the backend behind Firebase Hosting + Cloud Run**
+```bash
+cd backend/firebase-proxy
+gcloud run deploy fastvpn-proxy \
+  --source . \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars BACKEND_ORIGIN=http://YOUR_VPS_IP:8080
+
+firebase init hosting   # point it at this folder, use the firebase.json already here
+firebase deploy --only hosting
+```
+You'll get a `https://your-project.web.app` URL. Use that as the app's
+Backend API URL — the raw VPS IP is never exposed to the internet.
+
+**3. Restrict the dashboard to you**
+```bash
+export ADMIN_EMAILS="you@gmail.com,teammate@gmail.com"   # set wherever you run server.js
+```
+Restart the API. The dashboard's "Sign in with Google" now only lets those
+emails in — everyone else gets rejected even with a valid Google account. The
+old admin-key login still works too (needed for `setup.sh` to self-register
+VPS nodes, which doesn't involve a browser).
+
+**4. Android push notifications / analytics (optional)**
+- Project settings → Your apps → add an **Android app**, package
+  `com.fastvpn.app` → download `google-services.json` → put it in `app/`.
+- That's it — the Gradle plugin only activates once that file exists, and
+  `FastVpnMessagingService` starts receiving pushes automatically.
+
+---
+
 ## If something needs fixing later (advanced)
 
 - **Re-running `setup.sh --role node`** on the same VPS is safe — it reuses
   the existing WireGuard key and just updates that server's entry.
-- **Server list lives at** `/opt/easyvpn-api/data/servers.json` on the brain
+- **Server list lives at** `/opt/fastvpn-api/data/servers.json` on the brain
   VPS if you ever want to hand-edit an entry (e.g. change a display name).
 - **Server picking** is currently random among your servers. If you want
   load-based picking instead (send new users to whichever server has fewest

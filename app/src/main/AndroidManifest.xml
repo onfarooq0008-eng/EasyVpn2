@@ -18,14 +18,14 @@
     </queries>
 
     <application
-        android:name=".EasyVpnApp"
+        android:name=".FastVpnApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@style/Theme.EasyVPN"
+        android:theme="@style/Theme.FastVPN"
         tools:targetApi="36">
 
         <meta-data
@@ -35,7 +35,7 @@
         <activity
             android:name=".ui.SplashActivity"
             android:exported="true"
-            android:theme="@style/Theme.EasyVPN.Splash">
+            android:theme="@style/Theme.FastVPN.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -55,9 +55,20 @@
         <!-- Handles the Disconnect button on the persistent "connected" notification. -->
         <receiver android:name=".vpn.VpnActionReceiver" android:exported="false">
             <intent-filter>
-                <action android:name="com.easyvpn.app.ACTION_DISCONNECT" />
+                <action android:name="com.fastvpn.app.ACTION_DISCONNECT" />
             </intent-filter>
         </receiver>
+
+        <!-- No-ops if google-services.json wasn't added -- FCM only ever
+             delivers to this if the app is actually registered with a
+             Firebase project. -->
+        <service
+            android:name=".push.FastVpnMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
         <!-- REQUIRED by the WireGuard "tunnel" library itself: GoBackend binds to exactly
              this service class name to establish the VPN interface. This is not something

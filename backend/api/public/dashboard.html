@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EasyVPN — Server Dashboard</title>
+<title>FastVPN — Server Dashboard</title>
 <style>
   :root { color-scheme: light dark; }
   * { box-sizing: border-box; }
@@ -34,6 +34,9 @@
   .server-detail { font-size: 12px; color: #8a8a8a; }
   .server-count { text-align: right; font-size: 13px; }
   .server-count .n { font-weight: 700; }
+  .server-count .n.connected { color: #2E7D32; }
+  .server-count .row { margin-bottom: 4px; }
+  .server-count .row:last-child { margin-bottom: 0; }
   #loginBox { max-width: 420px; margin: 60px auto; text-align: center; }
   #loginBox input {
     width: 100%; padding: 12px; font-size: 15px; border-radius: 10px;
@@ -57,7 +60,10 @@
 <body>
 
 <div id="loginBox">
-  <h1>🌐 EasyVPN Dashboard</h1>
+  <h1>🌐 FastVPN Dashboard</h1>
+  <p class="subtitle">Sign in with your allowlisted Google account</p>
+  <button id="googleSignInBtn" onclick="signInWithGoogle()">Sign in with Google</button>
+  <p class="subtitle" style="margin:16px 0 4px;">-- or --</p>
   <p class="subtitle">Enter your admin key (the one setup.sh printed)</p>
   <input id="adminKeyInput" type="password" placeholder="Admin key" autocomplete="off">
   <button onclick="login()">View dashboard</button>
@@ -65,7 +71,7 @@
 </div>
 
 <div id="dashboard" class="hidden">
-  <h1>🌐 EasyVPN Dashboard</h1>
+  <h1>🌐 FastVPN Dashboard</h1>
   <p class="subtitle">Live status of every VPS connected to this brain</p>
 
   <div class="stats-row">
@@ -76,6 +82,10 @@
     <div class="card stat">
       <div class="num" id="statDevices">-</div>
       <div class="label">Devices registered</div>
+    </div>
+    <div class="card stat">
+      <div class="num" id="statConnected">-</div>
+      <div class="label">Connected now</div>
     </div>
   </div>
 
@@ -94,44 +104,90 @@
   <button class="refresh-btn" onclick="refresh()" style="margin-top:8px;">Refresh now</button>
 </div>
 
-<script>
-  let adminKey = localStorage.getItem('easyvpn_admin_key') || '';
+<script type="module">
+  // Public web config -- Firebase client config is NOT a secret (access is
+  // enforced server-side by the email allowlist, not by hiding this). Fill
+  // in with the values from Firebase Console -> Project settings -> Your apps
+  // -> Web app. Leave apiKey blank to hide the Google button and use the
+  // admin-key login only.
+  const firebaseConfig = {
+    apiKey: "",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    projectId: "YOUR_PROJECT",
+  };
+
+  let auth = null;
+  if (firebaseConfig.apiKey) {
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js");
+    const { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } =
+      await import("https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js");
+    const fbApp = initializeApp(firebaseConfig);
+    auth = getAuth(fbApp);
+    window.__googleProvider = new GoogleAuthProvider();
+    window.__signInWithPopup = signInWithPopup;
+    window.__fbAuth = auth;
+    onAuthStateChanged(auth, (user) => { if (user) showDashboard(); });
+  } else {
+    document.getElementById('googleSignInBtn').classList.add('hidden');
+  }
+
+  let adminKey = localStorage.getItem('fastvpn_admin_key') || '';
   let refreshTimer = null;
 
   if (adminKey) {
     showDashboard();
   }
 
-  function login() {
+  window.signInWithGoogle = async function () {
+    if (!auth) return;
+    try {
+      await window.__signInWithPopup(auth, window.__googleProvider);
+    } catch (e) {
+      document.getElementById('loginError').textContent = 'Google sign-in failed or was cancelled.';
+    }
+  };
+
+  window.login = function () {
     const input = document.getElementById('adminKeyInput').value.trim();
     if (!input) return;
     adminKey = input;
-    localStorage.setItem('easyvpn_admin_key', adminKey);
+    localStorage.setItem('fastvpn_admin_key', adminKey);
     showDashboard();
+  };
+
+  async function authHeaders() {
+    if (auth && auth.currentUser) {
+      const idToken = await auth.currentUser.getIdToken();
+      return { 'Authorization': 'Bearer ' + idToken };
+    }
+    return { 'X-Admin-Key': adminKey };
   }
 
   function showDashboard() {
     document.getElementById('loginBox').classList.add('hidden');
     document.getElementById('dashboard').classList.remove('hidden');
     const origin = window.location.protocol + '//' + window.location.host;
-    document.getElementById('addVpsCommand').textContent =
-      'sudo bash setup.sh --role node \\\n' +
-      '  --api-url ' + origin + ' \\\n' +
-      '  --admin-key ' + adminKey + ' \\\n' +
-      '  --country "United Kingdom" --country-code GB --city London';
+    document.getElementById('addVpsCommand').textContent = adminKey
+      ? 'sudo bash setup.sh --role node \\\n' +
+        '  --api-url ' + origin + ' \\\n' +
+        '  --admin-key ' + adminKey + ' \\\n' +
+        '  --country "United Kingdom" --country-code GB --city London'
+      : 'Signed in with Google -- the admin key for setup.sh is on the\n' +
+        'server itself: cat backend/api/data/admin.config.json';
     refresh();
     if (refreshTimer) clearInterval(refreshTimer);
     refreshTimer = setInterval(refresh, 10000);
   }
 
-  async function refresh() {
+  window.refresh = async function () {
     try {
       const resp = await fetch('/api/admin/dashboard', {
-        headers: { 'X-Admin-Key': adminKey }
+        headers: await authHeaders()
       });
       if (resp.status === 401) {
-        localStorage.removeItem('easyvpn_admin_key');
-        document.getElementById('loginError').textContent = 'Wrong admin key.';
+        localStorage.removeItem('fastvpn_admin_key');
+        adminKey = '';
+        document.getElementById('loginError').textContent = 'Sign-in expired or invalid -- please sign in again.';
         document.getElementById('dashboard').classList.add('hidden');
         document.getElementById('loginBox').classList.remove('hidden');
         return;
@@ -146,6 +202,7 @@
   function renderDashboard(data) {
     document.getElementById('statServers').textContent = data.totalServers;
     document.getElementById('statDevices').textContent = data.totalRegisteredDevices;
+    document.getElementById('statConnected').textContent = data.totalConnectedDevices ?? '-';
 
     const list = document.getElementById('serverList');
     const emptyMsg = document.getElementById('emptyMsg');
@@ -158,6 +215,9 @@
       data.servers.forEach((s) => {
         const row = document.createElement('div');
         row.className = 'server-row';
+        // activePeerCount comes from the agent's WireGuard handshake check --
+        // -1 means an older agent that doesn't report it, so fall back to a dash.
+        const connectedLabel = s.healthy && s.activePeerCount >= 0 ? s.activePeerCount : '-';
         row.innerHTML =
           '<div class="dot ' + (s.healthy ? 'up' : 'down') + '"></div>' +
           '<div class="server-info">' +
@@ -165,8 +225,8 @@
             '<div class="server-detail">' + escapeHtml(s.countryName) + (s.city ? ' • ' + escapeHtml(s.city) : '') + ' • ' + escapeHtml(s.endpointHost) + '</div>' +
           '</div>' +
           '<div class="server-count">' +
-            '<div class="n">' + s.registeredDevices + '</div>' +
-            '<div style="color:#8a8a8a;">devices</div>' +
+            '<div class="row"><span class="n connected">' + connectedLabel + '</span> <span style="color:#8a8a8a;">connected</span></div>' +
+            '<div class="row"><span class="n">' + s.registeredDevices + '</span> <span style="color:#8a8a8a;">registered</span></div>' +
           '</div>';
         list.appendChild(row);
       });

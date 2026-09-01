@@ -1,4 +1,4 @@
-// EasyVPN agent -- runs on EACH VPS, right next to WireGuard.
+// FastVPN agent -- runs on EACH VPS, right next to WireGuard.
 // The only thing it does: add a WireGuard peer when asked, by someone who
 // knows this VPS's API key. It never talks to other VPS or knows about them.
 //
@@ -47,10 +47,35 @@ function requireApiKey(req, res, next) {
   next();
 }
 
+// WireGuard is connectionless (UDP) -- a peer stays "configured" even after
+// the user closes the app, so peerCount alone can't tell you who's actually
+// connected right now. A peer that's actually in use re-handshakes roughly
+// every 2 minutes, so we treat anything with a handshake in the last 3
+// minutes as "active" -- that's the number the dashboard shows as connected.
+const ACTIVE_HANDSHAKE_WINDOW_SECONDS = 180;
+
 app.get('/health', requireApiKey, (req, res) => {
   execFile('wg', ['show', config.wgInterface, 'peers'], (err, stdout) => {
-    const peerCount = err ? -1 : stdout.trim().split('\n').filter(Boolean).length;
-    res.json({ ok: !err, peerCount });
+    if (err) {
+      return res.json({ ok: false, peerCount: -1, activePeerCount: -1 });
+    }
+    const peerCount = stdout.trim().split('\n').filter(Boolean).length;
+    execFile('wg', ['show', config.wgInterface, 'latest-handshakes'], (hsErr, hsStdout) => {
+      if (hsErr) {
+        // Older wg-tools or a transient error -- still report peerCount.
+        return res.json({ ok: true, peerCount, activePeerCount: -1 });
+      }
+      const nowSec = Math.floor(Date.now() / 1000);
+      const activePeerCount = hsStdout
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .filter((line) => {
+          const ts = Number(line.trim().split(/\s+/)[1]);
+          return ts > 0 && nowSec - ts <= ACTIVE_HANDSHAKE_WINDOW_SECONDS;
+        }).length;
+      res.json({ ok: true, peerCount, activePeerCount });
+    });
   });
 });
 
@@ -109,5 +134,5 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(config.port, '0.0.0.0', () => {
-  console.log(`EasyVPN agent listening on port ${config.port} for interface ${config.wgInterface}`);
+  console.log(`FastVPN agent listening on port ${config.port} for interface ${config.wgInterface}`);
 });

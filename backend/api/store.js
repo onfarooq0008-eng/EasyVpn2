@@ -24,7 +24,7 @@ function load() {
     return { registrations: {}, ipCounters: {}, reservations: {} };
   }
   const store = JSON.parse(fs.readFileSync(STORE_PATH, 'utf8'));
-  // Backward compatibility with stores created by older EasyVPN versions.
+  // Backward compatibility with stores created by older FastVPN versions.
   store.registrations ||= {};
   store.ipCounters ||= {};
   store.reservations ||= {};

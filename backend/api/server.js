@@ -1,4 +1,4 @@
-// EasyVPN control API -- the "brain" that the app talks to, and that each
+// FastVPN control API -- the "brain" that the app talks to, and that each
 // VPS's setup.sh registers itself with automatically. Deploy this on ONE
 // machine (any one of your VPS, or a separate small box). It never touches
 // WireGuard directly; it tells the right VPS's *agent* to do that.
@@ -10,6 +10,7 @@ const crypto = require('crypto');
 const store = require('./store');
 const serverStore = require('./serverStore');
 const { rateLimit } = require('./rateLimiter');
+const { verifyAdminToken } = require('./firebaseAuth');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const ADMIN_CONFIG_PATH = path.join(DATA_DIR, 'admin.config.json');
@@ -76,6 +77,22 @@ function requireAdminKey(req, res, next) {
   next();
 }
 
+// Accepts either the long-lived X-Admin-Key (used by setup.sh, machine to
+// machine -- no browser involved) or a Firebase ID token from an allowlisted
+// Google sign-in (used by the dashboard). Either is sufficient; this is what
+// lets the dashboard move to real login without breaking VPS self-registration.
+async function requireAdminAccess(req, res, next) {
+  if (req.header('X-Admin-Key') === adminConfig.adminKey) return next();
+  const authHeader = req.header('Authorization') || '';
+  const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const decoded = await verifyAdminToken(idToken);
+  if (decoded) {
+    req.adminEmail = decoded.email;
+    return next();
+  }
+  return res.status(401).json({ error: 'invalid or missing admin credentials' });
+}
+
 async function checkAgentHealth(agentUrl, agentApiKey) {
   try {
     const controller = new AbortController();
@@ -85,18 +102,65 @@ async function checkAgentHealth(agentUrl, agentApiKey) {
       signal: controller.signal,
     });
     clearTimeout(timeout);
-    if (!resp.ok) return { healthy: false, peerCount: -1 };
+    if (!resp.ok) return { healthy: false, peerCount: -1, activePeerCount: -1 };
     const body = await resp.json();
-    return { healthy: !!body.ok, peerCount: body.peerCount ?? -1 };
+    return {
+      healthy: !!body.ok,
+      peerCount: body.peerCount ?? -1,
+      activePeerCount: body.activePeerCount ?? -1,
+    };
   } catch (e) {
-    return { healthy: false, peerCount: -1 };
+    return { healthy: false, peerCount: -1, activePeerCount: -1 };
   }
 }
+
+// --- Auto-remove offline VPS ------------------------------------------------
+// Runs in the background regardless of whether anyone has the dashboard open.
+// A VPS that's been destroyed, reimaged, or just firewalled off is worse than
+// no server at all: the app would keep offering it to users who then fail to
+// connect. One bad check isn't enough to act on (a single dropped health
+// request happens); OFFLINE_REMOVAL_THRESHOLD consecutive failures is. To add
+// it back, just re-run setup.sh --role node on it -- that re-registers it.
+const HEALTH_SWEEP_INTERVAL_MS = 60_000;
+const OFFLINE_REMOVAL_THRESHOLD = 3;
+const consecutiveFailures = new Map(); // serverId -> count (in-memory, resets on restart)
+
+async function runHealthSweep() {
+  const servers = serverStore.loadServers();
+  for (const s of servers) {
+    const health = await checkAgentHealth(s.agentUrl, s.agentApiKey);
+    if (health.healthy) {
+      consecutiveFailures.delete(s.id);
+      continue;
+    }
+    const failures = (consecutiveFailures.get(s.id) || 0) + 1;
+    if (failures >= OFFLINE_REMOVAL_THRESHOLD) {
+      consecutiveFailures.delete(s.id);
+      const removed = await serverStore.removeServer(s.id);
+      if (removed) {
+        console.log(
+          `Removed ${s.id} (${s.countryName}) -- unreachable for ${OFFLINE_REMOVAL_THRESHOLD} consecutive checks (~${Math.round((OFFLINE_REMOVAL_THRESHOLD * HEALTH_SWEEP_INTERVAL_MS) / 60000)} min)`
+        );
+      }
+    } else {
+      consecutiveFailures.set(s.id, failures);
+    }
+  }
+}
+
+let sweepRunning = false;
+setInterval(() => {
+  if (sweepRunning) return; // don't overlap sweeps if one is still checking a slow/unreachable agent
+  sweepRunning = true;
+  runHealthSweep()
+    .catch((err) => console.error('Health sweep failed:', err.message))
+    .finally(() => { sweepRunning = false; });
+}, HEALTH_SWEEP_INTERVAL_MS);
 
 // Dashboard data -- the web UI (public/dashboard.html) polls this. Checks
 // every VPS's agent live, so "connected" really means reachable right now,
 // not just "was registered at some point."
-app.get('/api/admin/dashboard', rateLimit(60, 60_000), requireAdminKey, async (req, res) => {
+app.get('/api/admin/dashboard', rateLimit(60, 60_000), requireAdminAccess, async (req, res) => {
   const servers = serverStore.loadServers();
   const counts = store.registrationCounts();
 
@@ -113,15 +177,22 @@ app.get('/api/admin/dashboard', rateLimit(60, 60_000), requireAdminKey, async (r
         endpointPort: s.endpointPort,
         healthy: health.healthy,
         peerCount: health.peerCount,
+        activePeerCount: health.activePeerCount,
         registeredDevices: counts.byServer[s.id] || 0,
       };
     })
+  );
+
+  const totalConnectedDevices = withHealth.reduce(
+    (sum, s) => sum + (s.activePeerCount > 0 ? s.activePeerCount : 0),
+    0
   );
 
   res.json({
     servers: withHealth,
     totalServers: servers.length,
     totalRegisteredDevices: counts.total,
+    totalConnectedDevices,
   });
 });
 
@@ -311,7 +382,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`EasyVPN control API listening on port ${PORT}`);
+  console.log(`FastVPN control API listening on port ${PORT}`);
   console.log(`Dashboard: http://<this-server-ip>:${PORT}/`);
   console.log(`Admin key (needed once per VPS, printed again by: cat ${ADMIN_CONFIG_PATH}): ${adminConfig.adminKey}`);
 });

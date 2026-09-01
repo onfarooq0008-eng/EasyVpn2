@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# EasyVPN — WireGuard server setup script
+# FastVPN — WireGuard server setup script
 # Run this as root on each of your 6 VPS boxes (Ubuntu 22.04/24.04, 1GB RAM).
 # It installs WireGuard, generates server keys, enables NAT/forwarding, and
 # opens the firewall — everything you need to plug the server into the app's

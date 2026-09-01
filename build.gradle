@@ -8,6 +8,11 @@ buildscript {
 plugins {
     id 'com.android.application' version '8.13.2' apply false
     id 'org.jetbrains.kotlin.android' version '2.4.0' apply false
+    // Reads app/google-services.json (download from Firebase Console -> Project
+    // settings -> Your apps -> Android app, package com.fastvpn.app). Applied
+    // conditionally in app/build.gradle only if that file exists -- the plugin
+    // hard-fails the build if it's declared without the file present.
+    id 'com.google.gms.google-services' version '4.4.2' apply false
 }
 
 task clean(type: Delete) {

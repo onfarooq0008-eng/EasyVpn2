@@ -46,4 +46,16 @@ async function upsertServer(entry) {
   });
 }
 
-module.exports = { loadServers, saveServers, upsertServer, idForHost };
+/** Drops a server from the list (e.g. because it's been unreachable for too
+ *  long). Idempotent -- returns false if it was already gone. */
+async function removeServer(id) {
+  return withMutationLock(() => {
+    const servers = loadServers();
+    const filtered = servers.filter((s) => s.id !== id);
+    if (filtered.length === servers.length) return false;
+    saveServers(filtered);
+    return true;
+  });
+}
+
+module.exports = { loadServers, saveServers, upsertServer, idForHost, removeServer };
