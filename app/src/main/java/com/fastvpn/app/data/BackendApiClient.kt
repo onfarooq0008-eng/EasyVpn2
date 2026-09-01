@@ -24,8 +24,9 @@ data class BackendRegistration(
 
 /**
  * Talks to your /backend control API (see that folder for the server-side
- * code). Only used when AppSettings.backendApiUrl is set -- otherwise the app
- * sticks to the local Admin Panel list and the manual add-client.sh flow.
+ * code). AppSettings.backendApiUrl is always set in a real build (it falls
+ * back to the compiled-in BuildConfig.DEFAULT_BACKEND_API_URL), so this is
+ * the app's only path for fetching servers and registering devices.
  */
 class BackendApiClient {
 

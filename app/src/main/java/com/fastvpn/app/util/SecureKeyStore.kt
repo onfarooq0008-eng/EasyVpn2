@@ -34,7 +34,7 @@ class SecureKeyStore(context: Context) {
         return pair
     }
 
-    /** Give this public key to your admin panel / server-setup script to register the client as a peer. */
+    /** Give this public key to your server-setup script to register the client as a peer. */
 
     data class RegistrationLease(val serverId: String, val token: String)
 

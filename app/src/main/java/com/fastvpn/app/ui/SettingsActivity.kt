@@ -12,10 +12,8 @@ import com.fastvpn.app.data.AppSettings
 import com.fastvpn.app.databinding.ActivitySettingsBinding
 import com.fastvpn.app.util.applyEdgeToEdgeInsets
 
-/** Regular-user settings only. Admin-only actions (change admin password, server
- *  setup info) live in AdminPanelActivity, reachable only after the hidden
- *  long-press + password login -- they must never appear here where any user
- *  of the published app would see them. */
+/** Regular-user settings only. Server management is handled entirely by the
+ *  backend/VPS, so there's no in-app admin surface here. */
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivitySettingsBinding

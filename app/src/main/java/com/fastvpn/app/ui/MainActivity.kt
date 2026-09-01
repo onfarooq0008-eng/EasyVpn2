@@ -18,7 +18,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.fastvpn.app.R
 import com.fastvpn.app.ads.AdManager
-import com.fastvpn.app.admin.AdminLoginActivity
 import com.fastvpn.app.data.AppSettings
 import com.fastvpn.app.data.Server
 import com.fastvpn.app.data.ServerSource
@@ -36,9 +35,9 @@ import com.fastvpn.app.util.applyEdgeToEdgeInsets
 
 /**
  * Home screen: servers grouped by country, tap a country with 2+ servers to
- * expand it inline (no separate screen). Works in local Admin Panel mode or,
- * when a Backend API URL is set (built-in default or an override), talks to
- * your control API automatically -- see ServerSource / BackendApiClient.
+ * expand it inline (no separate screen). Talks to your control API
+ * automatically via the built-in Backend API URL -- see ServerSource /
+ * BackendApiClient.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -104,18 +103,6 @@ class MainActivity : AppCompatActivity() {
                 renderRows()
             }
         })
-
-        binding.textVersion.setOnLongClickListener {
-            // Admin Panel is intentionally unreachable in release builds -- gated on
-            // BuildConfig.DEBUG so the Play Store APK ships with zero UI path to it.
-            // (AdminLoginActivity itself still enforces the password too, in case
-            // anyone launches it directly via adb from an installed debug build --
-            // defense in depth, not just security-by-obscurity.)
-            if (com.fastvpn.app.BuildConfig.DEBUG) {
-                startActivity(Intent(this, AdminLoginActivity::class.java))
-            }
-            true
-        }
 
         requestNotificationPermissionIfNeeded()
         AdManager.loadBanner(binding.adContainer, this)
@@ -397,34 +384,23 @@ class MainActivity : AppCompatActivity() {
             var registrationServerId: String? = null
             var registrationToken: String? = null
 
-            if (serverSource.isBackendMode()) {
-                try {
-                    val publicKey = keyStore.clientPublicKeyBase64()
-                    val reg = serverSource.register(publicKey, preferredServerId = server.id)
-                    connectServer = server.copy(
-                        endpointHost = reg.endpointHost,
-                        endpointPort = reg.endpointPort,
-                        serverPublicKey = reg.serverPublicKey,
-                        dns = reg.dns
-                    )
-                    assignedAddressCidr = "${reg.assignedAddress}/32"
-                    registrationServerId = reg.serverId
-                    registrationToken = reg.registrationToken
-                    if (reg.registrationToken.isNotBlank()) {
-                        keyStore.addPendingRegistration(reg.serverId, reg.registrationToken)
-                    }
-                } catch (e: Exception) {
-                    tryNextOrFail(chain, attemptIndex, "Registration failed: ${e.message}")
-                    return@launch
-                }
-            } else {
-                // Production connections must use the backend allocator. The old
-                // client-side hash allocator has been removed because it can collide.
-                tryNextOrFail(
-                    chain,
-                    attemptIndex,
-                    "Automatic server registration is required. Configure the Backend API in Admin Panel."
+            try {
+                val publicKey = keyStore.clientPublicKeyBase64()
+                val reg = serverSource.register(publicKey, preferredServerId = server.id)
+                connectServer = server.copy(
+                    endpointHost = reg.endpointHost,
+                    endpointPort = reg.endpointPort,
+                    serverPublicKey = reg.serverPublicKey,
+                    dns = reg.dns
                 )
+                assignedAddressCidr = "${reg.assignedAddress}/32"
+                registrationServerId = reg.serverId
+                registrationToken = reg.registrationToken
+                if (reg.registrationToken.isNotBlank()) {
+                    keyStore.addPendingRegistration(reg.serverId, reg.registrationToken)
+                }
+            } catch (e: Exception) {
+                tryNextOrFail(chain, attemptIndex, "Registration failed: ${e.message}")
                 return@launch
             }
 

@@ -4,8 +4,8 @@ import com.fastvpn.app.data.Server
 
 /**
  * Not persisted -- computed on the fly from the flat server list so that when
- * you add a 2nd, 3rd, etc. server with the same country code in the Admin
- * Panel, they automatically appear grouped under one country entry here.
+ * you add a 2nd, 3rd, etc. server with the same country code on the backend,
+ * they automatically appear grouped under one country entry here.
  * There's no cap on how many servers or countries you can add.
  */
 data class CountryGroup(

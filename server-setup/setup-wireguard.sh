@@ -3,8 +3,8 @@
 # FastVPN — WireGuard server setup script
 # Run this as root on each of your 6 VPS boxes (Ubuntu 22.04/24.04, 1GB RAM).
 # It installs WireGuard, generates server keys, enables NAT/forwarding, and
-# opens the firewall — everything you need to plug the server into the app's
-# Admin Panel afterwards.
+# opens the firewall — everything you need to plug the server into the
+# backend afterwards.
 #
 # Usage:  sudo bash setup-wireguard.sh [wg-subnet-base]
 #   wg-subnet-base defaults to 10.8.0 (i.e. WireGuard uses 10.8.0.0/24).
@@ -80,7 +80,7 @@ systemctl start wg-quick@${WG_IFACE}
 
 echo ""
 echo "============================================================"
-echo " DONE. Put these into the app's Admin Panel -> Add server:"
+echo " DONE. Register this server with the backend using these values"
 echo "   Host (VPS IP):     $(curl -s -4 ifconfig.me)"
 echo "   Port:               ${WG_PORT}"
 echo "   Server public key:  ${SERVER_PUB}"

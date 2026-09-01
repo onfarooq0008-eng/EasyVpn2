@@ -48,7 +48,7 @@ Now run this SAME script with --role node on EVERY OTHER VPS:
     --api-url http://203.0.113.1:8080 \
     --admin-key 9f2ab31c...
 
-Then in the app: Admin Panel -> Backend API URL -> http://203.0.113.1:8080
+Then bake http://203.0.113.1:8080 into the app as DEFAULT_BACKEND_API_URL (see Step 3 below)
 ```
 
 ### Step 2 — run this on EVERY OTHER VPS (the ones that will carry VPN traffic)
@@ -78,11 +78,7 @@ run both `--role api` and `--role node` on it).
 
 ### Step 3 — point the app at it
 
-For your own testing device, the quickest way: Admin Panel → **Backend API
-URL** → paste the URL from Step 1 → Save.
-
-For **every real user** to get this automatically with zero setup on their
-end, bake it into the app itself instead — one line in
+The backend URL is baked into the app at build time — one line in
 `app/build.gradle`:
 
 ```groovy
@@ -90,9 +86,9 @@ buildConfigField "String", "DEFAULT_BACKEND_API_URL", "\"http://203.0.113.1:8080
 ```
 
 Rebuild the app, and every install automatically uses that backend — no
-Admin Panel visit needed by anyone. The Admin Panel field still works too,
-as a per-device override (handy for testing a second backend without
-rebuilding).
+manual setup needed by anyone. Server management (adding/removing VPS,
+countries, etc.) all happens on the backend side via `setup.sh`; there's no
+in-app admin UI.
 
 ---
 
@@ -145,57 +141,8 @@ cleartext HTTP enabled just for this — see `app/src/debug/`). But:
 Simplest free path: point a domain name at your brain VPS and put
 [Caddy](https://caddyserver.com) in front of it as a reverse proxy — a few
 lines of config gets you a valid certificate automatically, renewed forever,
-no manual work. Then use the `https://` URL in the app's Admin Panel instead
-of the raw IP.
-
----
-
-## Firebase: HTTPS that hides your VPS IP, real dashboard login, and app push
-
-Optional, and separate from the Caddy option above — pick whichever fits.
-Firebase Hosting can't proxy an arbitrary IP directly, so this uses a small
-Cloud Run proxy in between; your brain VPS backend itself is unchanged.
-
-**1. Create the Firebase project**
-- [Firebase Console](https://console.firebase.google.com) → Add project (this
-  also creates a matching Google Cloud project, which is what Cloud Run
-  deploys into).
-- Authentication → Sign-in method → enable **Google**.
-- Project settings → Your apps → add a **Web app** → copy the `firebaseConfig`
-  object into `backend/api/public/dashboard.html` (it's public info, not a
-  secret — access is enforced by the email allowlist below, not by hiding it).
-- Project settings → Service accounts → Generate new private key → save the
-  file as `backend/api/data/firebase-service-account.json`.
-
-**2. Hide the backend behind Firebase Hosting + Cloud Run**
-```bash
-cd backend/firebase-proxy
-gcloud run deploy fastvpn-proxy \
-  --source . \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --set-env-vars BACKEND_ORIGIN=http://YOUR_VPS_IP:8080
-
-firebase init hosting   # point it at this folder, use the firebase.json already here
-firebase deploy --only hosting
-```
-You'll get a `https://your-project.web.app` URL. Use that as the app's
-Backend API URL — the raw VPS IP is never exposed to the internet.
-
-**3. Restrict the dashboard to you**
-```bash
-export ADMIN_EMAILS="you@gmail.com,teammate@gmail.com"   # set wherever you run server.js
-```
-Restart the API. The dashboard's "Sign in with Google" now only lets those
-emails in — everyone else gets rejected even with a valid Google account. The
-old admin-key login still works too (needed for `setup.sh` to self-register
-VPS nodes, which doesn't involve a browser).
-
-**4. Android push notifications / analytics (optional)**
-- Project settings → Your apps → add an **Android app**, package
-  `com.fastvpn.app` → download `google-services.json` → put it in `app/`.
-- That's it — the Gradle plugin only activates once that file exists, and
-  `FastVpnMessagingService` starts receiving pushes automatically.
+no manual work. Then use the `https://` URL as the app's Backend API URL
+instead of the raw IP.
 
 ---
 

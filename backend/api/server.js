@@ -10,7 +10,6 @@ const crypto = require('crypto');
 const store = require('./store');
 const serverStore = require('./serverStore');
 const { rateLimit } = require('./rateLimiter');
-const { verifyAdminToken } = require('./firebaseAuth');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const ADMIN_CONFIG_PATH = path.join(DATA_DIR, 'admin.config.json');
@@ -77,19 +76,10 @@ function requireAdminKey(req, res, next) {
   next();
 }
 
-// Accepts either the long-lived X-Admin-Key (used by setup.sh, machine to
-// machine -- no browser involved) or a Firebase ID token from an allowlisted
-// Google sign-in (used by the dashboard). Either is sufficient; this is what
-// lets the dashboard move to real login without breaking VPS self-registration.
+// Accepts the long-lived X-Admin-Key (used by setup.sh, machine to machine --
+// no browser involved -- and also by the dashboard's login form).
 async function requireAdminAccess(req, res, next) {
   if (req.header('X-Admin-Key') === adminConfig.adminKey) return next();
-  const authHeader = req.header('Authorization') || '';
-  const idToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  const decoded = await verifyAdminToken(idToken);
-  if (decoded) {
-    req.adminEmail = decoded.email;
-    return next();
-  }
   return res.status(401).json({ error: 'invalid or missing admin credentials' });
 }
 

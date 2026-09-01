@@ -27,7 +27,7 @@ data class Server(
     var maxRecommendedUsers: Int = 40, // rough capacity hint for a 1GB RAM VPS
     var enabled: Boolean = true,
 
-    // runtime-only fields (not persisted from admin form, filled in at runtime)
+    // runtime-only fields (not persisted, filled in at runtime)
     @Transient var pingMs: Int = -1,   // -1 = not tested yet, -2 = unreachable
     @Transient var isConnecting: Boolean = false
 ) {

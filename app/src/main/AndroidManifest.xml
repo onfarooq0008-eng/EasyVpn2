@@ -47,28 +47,12 @@
         <activity android:name=".ui.SplitTunnelActivity" android:exported="false" />
         <activity android:name=".ui.DiagnosticsActivity" android:exported="false" />
 
-        <!-- Admin panel: hidden entry point, password protected. See MainActivity long-press on version text -->
-        <activity android:name=".admin.AdminLoginActivity" android:exported="false" />
-        <activity android:name=".admin.AdminPanelActivity" android:exported="false" />
-        <activity android:name=".admin.AddEditServerActivity" android:exported="false" />
-
         <!-- Handles the Disconnect button on the persistent "connected" notification. -->
         <receiver android:name=".vpn.VpnActionReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="com.fastvpn.app.ACTION_DISCONNECT" />
             </intent-filter>
         </receiver>
-
-        <!-- No-ops if google-services.json wasn't added -- FCM only ever
-             delivers to this if the app is actually registered with a
-             Firebase project. -->
-        <service
-            android:name=".push.FastVpnMessagingService"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-            </intent-filter>
-        </service>
 
         <!-- REQUIRED by the WireGuard "tunnel" library itself: GoBackend binds to exactly
              this service class name to establish the VPN interface. This is not something

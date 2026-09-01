@@ -9,8 +9,6 @@ yourself, with:
 - **Automatic device registration** via a backend API baked into the app
   itself — every user who installs the app gets your servers automatically,
   zero setup on their end. See `/backend`.
-- **In-app Admin Panel** (password-gated, hidden from regular users) to add/edit
-  servers manually and point the app at your backend
 - **100% free, ad-supported** — no paywall, monetized entirely through AdMob
 - **Search**, **dark mode**, **split tunneling**, a **connection timer + data
   usage** counter, and a **persistent notification with a one-tap Disconnect
@@ -75,9 +73,7 @@ sudo bash backend/setup.sh --role node --api-url ... --admin-key ... --country "
 Each VPS sets up WireGuard, installs its agent, and registers itself with the
 brain automatically. **The app's `DEFAULT_BACKEND_API_URL` (in
 `app/build.gradle`) is already set to your brain's address** — every install
-of the app uses it automatically, no Admin Panel visit needed by anyone. The
-Admin Panel's Backend API URL field still works too, as a per-device override
-for testing a different backend without rebuilding.
+of the app uses it automatically, no per-device setup needed by anyone.
 
 ---
 
@@ -207,7 +203,6 @@ rename or remove it.
 | Item | Where |
 |---|---|
 | AdMob App ID + ad unit IDs | `AndroidManifest.xml`, `ads/AdManager.kt` |
-| Admin password | Admin Panel → Change admin password (first login: `changeme123`) |
 | App icon / branding | `res/mipmap-anydpi-v26`, `res/drawable` |
 | HTTPS for your backend | See section 5 |
 | Signing keystore | See section 9 |
