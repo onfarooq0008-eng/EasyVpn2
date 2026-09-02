@@ -371,8 +371,13 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`FastVPN control API listening on port ${PORT}`);
+// Defaults to 0.0.0.0 (all interfaces) for backward compatibility with existing
+// installs. setup.sh sets HOST=127.0.0.1 when a --domain is configured, so the
+// API is only reachable through the local Nginx reverse proxy, never directly
+// from the internet.
+const HOST = process.env.HOST || '0.0.0.0';
+app.listen(PORT, HOST, () => {
+  console.log(`FastVPN control API listening on ${HOST}:${PORT}`);
   console.log(`Dashboard: http://<this-server-ip>:${PORT}/`);
   console.log(`Admin key (needed once per VPS, printed again by: cat ${ADMIN_CONFIG_PATH}): ${adminConfig.adminKey}`);
 });

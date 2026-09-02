@@ -36,6 +36,11 @@ cd ~/backend
 sudo bash setup.sh --role api
 ```
 
+(Have a domain ready to go behind Cloudflare? Use
+`sudo bash setup.sh --role api --domain api.yourdomain.com` instead — see
+"HTTPS before you actually launch publicly" below. Plain `--role api` is
+fine for now if you just want to test first.)
+
 It prints something like this — **copy the whole block down**, you'll reuse
 it for every other VPS:
 
@@ -138,11 +143,52 @@ cleartext HTTP enabled just for this — see `app/src/debug/`). But:
   you build a release APK/AAB for the Play Store.
 - Play Store expects HTTPS for anything talking to a real backend.
 
-Simplest free path: point a domain name at your brain VPS and put
-[Caddy](https://caddyserver.com) in front of it as a reverse proxy — a few
-lines of config gets you a valid certificate automatically, renewed forever,
-no manual work. Then use the `https://` URL as the app's Backend API URL
-instead of the raw IP.
+`setup.sh` has this built in — one flag, no separate tools to install
+yourself:
+
+```bash
+sudo bash setup.sh --role api --domain api.yourdomain.com
+```
+
+This sets up: `Internet → Cloudflare → HTTPS :443 → Nginx → 127.0.0.1:8080 →
+API`. Specifically it:
+- Installs and configures **Nginx** as a reverse proxy on port 443
+- Makes the API listen on **127.0.0.1 only** — never on the public interface
+- Blocks port 8080 from the public internet with **ufw** (SSH stays open)
+- Prepares everything for Cloudflare's **SSL/TLS → Full (strict)** mode
+
+**Before running it**, point your domain's DNS at the VPS through Cloudflare
+(proxied / orange cloud), and grab a **Cloudflare Origin Certificate**:
+Cloudflare dashboard → your domain → SSL/TLS → Origin Server → Create
+Certificate (RSA 2048, include your domain, 15-year validity). It gives you
+two blocks of text — save them as `<domain>.pem` (the certificate) and
+`<domain>.key` (the private key).
+
+If you run the command above *before* you have those two files, it still
+works — it self-signs a temporary certificate so Nginx starts and the API
+stays reachable, but Cloudflare's "Full (strict)" mode won't trust that
+temporary cert. It prints the exact two file paths to drop your real
+Cloudflare cert/key into (default: `/etc/ssl/fastvpn/<domain>.pem` and
+`.key`) — once they're there, just **run the exact same command again** and
+it picks them up and reloads Nginx automatically. Safe to re-run any time.
+
+Then set your app's `DEFAULT_BACKEND_API_URL` to `https://api.yourdomain.com`
+and rebuild.
+
+**Verify it worked**, from your own machine (not the VPS itself):
+```bash
+curl -s https://api.yourdomain.com/api/health        # should return JSON
+curl -v --max-time 5 http://YOUR_VPS_IP:8080/api/health  # should time out / refuse
+```
+
+Optional extra hardening — restrict 80/443 to Cloudflare's own IP ranges
+(so nothing can reach Nginx except through Cloudflare):
+```bash
+sudo bash setup.sh --role api --domain api.yourdomain.com --cf-only
+```
+Only add `--cf-only` once you've confirmed the domain works normally first —
+it makes port 443 unreachable for direct testing (curl from your own machine
+outside Cloudflare, browser previews, etc).
 
 ---
 
