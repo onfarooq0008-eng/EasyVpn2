@@ -127,15 +127,66 @@ async function saveRegistration(devicePublicKey, serverId, assignedAddress, regi
     const existing = store.registrations[key];
     if (existing) return existing;
 
+    const now = new Date().toISOString();
     store.registrations[key] = {
       serverId,
       assignedAddress,
       registrationToken,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+      lastSeenAt: now,
     };
     delete store.reservations[key];
     save(store);
     return store.registrations[key];
+  });
+}
+
+/** Refreshes lastSeenAt for an already-registered device -- called on every
+ *  idempotent re-registration (app reconnecting to a server it's already on)
+ *  so actively-used registrations never look stale to pruneStaleRegistrations,
+ *  even though they were created long ago and never re-create their row. */
+async function touchRegistration(devicePublicKey, serverId) {
+  return withMutationLock(() => {
+    const store = load();
+    const key = registrationKey(devicePublicKey, serverId);
+    if (!store.registrations[key]) return false;
+    store.registrations[key].lastSeenAt = new Date().toISOString();
+    save(store);
+    return true;
+  });
+}
+
+/** Registrations not seen in over maxAgeMs -- candidates for pruneStaleRegistrations.
+ *  Falls back to createdAt for rows saved before lastSeenAt existed. Read-only:
+ *  actually removing one requires telling the VPS agent to drop the peer first,
+ *  which only the caller (server.js) can do -- see removeRegistrationByKey. */
+function findStaleRegistrations(maxAgeMs) {
+  const store = load();
+  const cutoff = Date.now() - maxAgeMs;
+  const stale = [];
+  for (const [key, reg] of Object.entries(store.registrations)) {
+    const lastActivity = new Date(reg.lastSeenAt || reg.createdAt).getTime();
+    if (Number.isFinite(lastActivity) && lastActivity < cutoff) {
+      const sep = key.lastIndexOf('::');
+      stale.push({ devicePublicKey: key.slice(0, sep), serverId: key.slice(sep + 2), ...reg });
+    }
+  }
+  return stale;
+}
+
+/** Administrative removal for the pruning sweep -- unlike removeRegistration,
+ *  does not require the caller to present the registration's own token, since
+ *  this is invoked by the server itself, not a client request. Only call this
+ *  after the VPS agent has confirmed the peer is actually removed. */
+async function removeRegistrationByKey(devicePublicKey, serverId) {
+  return withMutationLock(() => {
+    const store = load();
+    const key = registrationKey(devicePublicKey, serverId);
+    if (!store.registrations[key]) return false;
+    delete store.registrations[key];
+    delete store.reservations[key];
+    save(store);
+    return true;
   });
 }
 
@@ -171,6 +222,9 @@ module.exports = {
   reserveAddress,
   releaseReservation,
   saveRegistration,
+  touchRegistration,
+  findStaleRegistrations,
+  removeRegistrationByKey,
   registrationCounts,
   removeRegistration,
 };

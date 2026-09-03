@@ -1,6 +1,7 @@
 package com.fastvpn.app.vpn
 
 import android.content.Context
+import android.util.Log
 import com.fastvpn.app.data.Server
 import com.wireguard.android.backend.GoBackend
 import com.wireguard.android.backend.Tunnel
@@ -19,11 +20,54 @@ enum class TunnelState { DOWN, CONNECTING, UP }
  * The client's own private key is generated once on-device and never leaves it.
  * In production/backend mode the control API allocates the client tunnel IP
  * atomically and returns it with the server configuration.
+ *
+ * ============================================================================
+ * TUNNEL LIFECYCLE OWNERSHIP -- read before touching connect()/disconnect()/
+ * syncStateFromBackend(). Verified against the actual wireguard-android
+ * source (GoBackend.java), not just this library's public API docs:
+ *
+ * - GoBackend keeps `currentTunnel`/`currentConfig` as PRIVATE, PER-INSTANCE
+ *   fields. A second `GoBackend(context)` object has no way to see those --
+ *   which is exactly why VpnTunnelManagerHolder exists: every component in
+ *   this process (MainActivity, VpnActionReceiver) MUST share the one
+ *   GoBackend instance held here, never construct their own.
+ * - Separately, the real OS-level tunnel handle is bound via a Java
+ *   `static CompletableFuture<VpnService>` field on GoBackend -- static, so
+ *   it's shared PROCESS-WIDE regardless of which GoBackend instance asks.
+ *   This is why `getRunningTunnelNames()` is trustworthy even from a fresh
+ *   GoBackend instance within the same process: it queries the real,
+ *   process-shared VpnService/native state, not the per-instance fields.
+ * - Reattaching via `SimpleTunnel(TUNNEL_NAME)` after Activity recreation is
+ *   therefore correct BECAUSE tunnels are identified by name at the native
+ *   layer, not by Tunnel object identity -- as long as it's process-shared
+ *   state being queried (getRunningTunnelNames), not per-instance state.
+ *
+ * - What this does NOT cover, and what genuinely still needs a real device:
+ *   1. Full process death (not just Activity death). If the OS kills the
+ *      whole process, the in-process wireguard-go native runtime dies with
+ *      it -- there's no separate daemon. getRunningTunnelNames() on restart
+ *      should then correctly report nothing running. But whether Android
+ *      restarts the VpnService automatically first (via its own retry/
+ *      always-on logic) before our code ever runs is OS/OEM-dependent and
+ *      cannot be confirmed from source reading alone.
+ *   2. The wireguard-android maintainers themselves have had to patch a
+ *      "VPN service expiration" bug where Android destroys the VpnService
+ *      after a timeout independent of anything this app does -- meaning
+ *      the tunnel can go down for reasons outside connect()/disconnect()
+ *      entirely. syncStateFromBackend() is the mitigation (call it whenever
+ *      the UI needs a trustworthy state), but its actual reliability across
+ *      OEM battery-management skins (MIUI, ColorOS, etc.) is not something
+ *      that can be verified without physical devices running those skins.
+ *
+ * NOT YET VERIFIED ON A REAL DEVICE. See MANUAL_TESTING.md for the exact
+ * checklist to run before relying on this for a public release.
+ * ============================================================================
  */
 class VpnTunnelManager(private val context: Context) {
 
     companion object {
         const val TUNNEL_NAME = "fastvpn"
+        private const val TAG = "FastVPN-Tunnel"
     }
 
     private val backend = GoBackend(context)
@@ -87,9 +131,11 @@ class VpnTunnelManager(private val context: Context) {
             backend.setState(tunnel, Tunnel.State.UP, config)
             currentTunnel = tunnel
             state = TunnelState.UP
+            Log.d(TAG, "connect: tunnel up on ${server.id}")
             Result.success(Unit)
         } catch (e: Exception) {
             state = TunnelState.DOWN
+            Log.e(TAG, "connect: failed", e)
             Result.failure(e)
         }
         }
@@ -101,8 +147,10 @@ class VpnTunnelManager(private val context: Context) {
             currentTunnel?.let { backend.setState(it, Tunnel.State.DOWN, null) }
             currentTunnel = null
             state = TunnelState.DOWN
+            Log.d(TAG, "disconnect: tunnel torn down")
             Result.success(Unit)
         } catch (e: Exception) {
+            Log.e(TAG, "disconnect: failed -- tunnel may still be UP", e)
             Result.failure(e)
         }
         }
@@ -111,36 +159,41 @@ class VpnTunnelManager(private val context: Context) {
     /**
      * Synchronize our in-memory state with this manager's GoBackend.
      *
-     * GoBackend deliberately keeps the active Tunnel as an object reference.
-     * Therefore we must never manufacture a new SimpleTunnel merely because
-     * Android reports that some VPN interface is active: doing so creates a
-     * fake handle that GoBackend does not own and makes disconnect() a no-op.
+     * getRunningTunnelNames() queries process-wide, static-field-backed state
+     * on GoBackend (see the class doc above) -- it is authoritative for "is a
+     * real tunnel by this name up right now" independent of whether THIS
+     * GoBackend instance's own currentTunnel field happens to be set. We must
+     * never manufacture a new SimpleTunnel merely because Android's generic
+     * VPN UI reports some interface active (that could be a different app's
+     * VPN); we only do it once this specific tunnel name is confirmed running.
      *
      * VpnTunnelManagerHolder guarantees that all app components in the same
      * process use this manager/backend instance. If the process itself was
-     * killed, the GoBackend/VpnService state is gone as well and the correct
-     * state for a new manager is DOWN.
+     * killed, the in-process wireguard-go native runtime dies with it -- the
+     * correct state for a freshly-restarted process is DOWN, and this method
+     * should report that correctly since there is no real tunnel left to find.
      */
     fun syncStateFromBackend(): TunnelState {
         return try {
             val running = backend.getRunningTunnelNames().contains(TUNNEL_NAME)
             state = if (running) {
-                // GoBackend identifies tunnels by name. Recreate the lightweight
-                // Tunnel descriptor after Activity/process recreation so the Home
-                // screen and notification can still control the running tunnel.
-                if (currentTunnel == null) currentTunnel = SimpleTunnel(TUNNEL_NAME)
+                if (currentTunnel == null) {
+                    Log.d(TAG, "syncStateFromBackend: reattaching to running tunnel '$TUNNEL_NAME'")
+                    currentTunnel = SimpleTunnel(TUNNEL_NAME)
+                }
                 TunnelState.UP
             } else {
+                if (currentTunnel != null) Log.d(TAG, "syncStateFromBackend: tunnel no longer running, clearing handle")
                 currentTunnel = null
                 TunnelState.DOWN
             }
             state
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e(TAG, "syncStateFromBackend: getRunningTunnelNames() threw", e)
             state = if (currentTunnel != null) TunnelState.UP else TunnelState.DOWN
             state
         }
     }
-
 
     fun statistics() = currentTunnel?.let { runCatching { backend.getStatistics(it) }.getOrNull() }
 }

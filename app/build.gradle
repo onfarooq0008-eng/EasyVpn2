@@ -31,7 +31,7 @@ android {
         // Baked into every build -- every user of the published app automatically
         // uses this backend with zero setup on their end. Update this one line
         // whenever you change which server is your "brain".
-        buildConfigField "String", "DEFAULT_BACKEND_API_URL", "\"http://51.170.85.90:8080\""
+        buildConfigField "String", "DEFAULT_BACKEND_API_URL", "\"https://api.fastvpnn.pp.ua\""
     }
 
     signingConfigs {

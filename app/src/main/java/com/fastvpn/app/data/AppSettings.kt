@@ -75,4 +75,10 @@ class AppSettings(context: Context) {
         else -> serverDns
     }
 
+    /** Whether the user has accepted the Privacy Policy / Terms on the consent
+     *  screen shown before first use. Gates access to MainActivity. */
+    var hasAcceptedTerms: Boolean
+        get() = prefs.getBoolean("has_accepted_terms", false)
+        set(value) = prefs.edit().putBoolean("has_accepted_terms", value).apply()
+
 }

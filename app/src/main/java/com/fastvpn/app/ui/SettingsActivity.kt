@@ -52,10 +52,6 @@ class SettingsActivity : AppCompatActivity() {
         binding.buttonSplitTunneling.setOnClickListener {
             startActivity(Intent(this, SplitTunnelActivity::class.java))
         }
-
-        binding.buttonDiagnostics.setOnClickListener {
-            startActivity(Intent(this, DiagnosticsActivity::class.java))
-        }
     }
 
     private fun setUpThemeRadioGroup() {

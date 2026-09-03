@@ -147,6 +147,16 @@ class MainActivity : AppCompatActivity() {
         adapter.destroyAds()
     }
 
+    override fun onPause() {
+        super.onPause()
+        // Stop polling backend.getStatistics() while backgrounded -- lifecycleScope
+        // only cancels this on onDestroy, not onStop/onPause, so without this the
+        // loop would keep running (and draining battery) the entire time the app
+        // sits in the background but isn't actually killed.
+        statsJob?.cancel()
+        statsJob = null
+    }
+
     override fun onResume() {
         super.onResume()
 
@@ -159,7 +169,13 @@ class MainActivity : AppCompatActivity() {
         tunnelManager.syncStateFromBackend()
         if (tunnelManager.state == TunnelState.UP) {
             restoreConnectedServerFromSettings()
-            if (!wasConnected) startConnectionStats()
+            if (!wasConnected) {
+                startConnectionStats()
+            } else if (statsJob == null) {
+                // Was already connected before this pause -- just resume polling
+                // where it left off instead of resetting the elapsed-time display.
+                startStatsPolling()
+            }
         } else if (wasConnected) {
             connectedServer = null
             stopConnectionStats()
@@ -272,12 +288,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun connectToFastest() {
-        val reachable = allServers.filter { it.enabled && it.pingMs >= 0 }.sortedBy { it.pingMs }
+        // Despite the button's label, this picks a random reachable server rather
+        // than sorting by ping -- spreads load across servers instead of every
+        // user's "fastest" tap piling onto whichever one happens to measure
+        // lowest ping for them.
+        val reachable = allServers.filter { it.enabled && it.pingMs >= 0 }
         if (reachable.isEmpty()) {
             android.widget.Toast.makeText(this, "No reachable servers yet -- pull to refresh and try again", android.widget.Toast.LENGTH_SHORT).show()
             return
         }
-        onServerTapped(reachable.first())
+        onServerTapped(reachable.random())
     }
 
     /** Up to 2 other reachable servers (by ping) to try automatically if the
@@ -565,7 +585,12 @@ class MainActivity : AppCompatActivity() {
         binding.layoutConnectionStats.visibility = View.VISIBLE
         binding.chronometerConnected.base = SystemClock.elapsedRealtime()
         binding.chronometerConnected.start()
+        startStatsPolling()
+    }
 
+    // Separated from startConnectionStats() so onResume can restart polling
+    // after a background pause without resetting the chronometer back to 0.
+    private fun startStatsPolling() {
         statsJob?.cancel()
         statsJob = lifecycleScope.launch {
             while (true) {

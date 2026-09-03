@@ -100,6 +100,5 @@
         </com.google.android.material.card.MaterialCardView>
 
         <com.google.android.material.button.MaterialButton android:id="@+id/buttonSplitTunneling" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="16dp" android:text="Split tunneling  •  Choose apps" android:textAllCaps="false" style="@style/Widget.MaterialComponents.Button.OutlinedButton" app:cornerRadius="16dp" />
-        <com.google.android.material.button.MaterialButton android:id="@+id/buttonDiagnostics" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="8dp" android:text="Connection diagnostics" android:textAllCaps="false" style="@style/Widget.MaterialComponents.Button.OutlinedButton" app:cornerRadius="16dp" />
     </LinearLayout>
 </ScrollView>

@@ -110,7 +110,8 @@ if [[ "$ROLE" == "api" ]]; then
   cp "${SCRIPT_DIR}/api/serverStore.js" "${INSTALL_DIR}/serverStore.js"
   cp "${SCRIPT_DIR}/api/rateLimiter.js" "${INSTALL_DIR}/rateLimiter.js"
   cp "${SCRIPT_DIR}/api/package.json" "${INSTALL_DIR}/package.json"
-  cp -r "${SCRIPT_DIR}/api/public" "${INSTALL_DIR}/public"
+  mkdir -p "${INSTALL_DIR}/public"
+  cp -r "${SCRIPT_DIR}/api/public/." "${INSTALL_DIR}/public/"
 
   cd "${INSTALL_DIR}"
   echo "==> Installing dependencies..."

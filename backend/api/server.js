@@ -21,6 +21,15 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 // register unlimited fake devices to exhaust the address pool.
 const MAX_REGISTRATIONS_PER_SERVER = 200;
 
+// A device that force-kills the app, uninstalls, or has its process killed by
+// the OS before a normal disconnect never calls /api/unregister -- its
+// registration would otherwise sit here forever, permanently eating one of
+// the MAX_REGISTRATIONS_PER_SERVER slots for a device that isn't actually
+// using it. 30 days is generous (VPN clients can legitimately stay connected
+// or reconnect over that span without ever re-registering, since /api/register
+// is idempotent), while still eventually reclaiming genuinely abandoned slots.
+const STALE_REGISTRATION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
 // Auto-generates its own admin key on first run -- nothing to configure by
 // hand before starting this. setup.sh reads this file afterwards to show you
 // the key (and the exact command to run on each other VPS).
@@ -248,9 +257,24 @@ app.post('/api/register', rateLimit(20, 60_000), async (req, res) => {
 
   let server;
   if (preferredServerId) {
-    server = servers.find((s) => s.id === preferredServerId);
-    if (!server) {
-      return res.status(404).json({ error: 'no matching server available' });
+    const preferred = servers.find((s) => s.id === preferredServerId);
+    if (preferred && hasCapacity(preferred)) {
+      server = preferred;
+    } else {
+      // Preferred server doesn't exist, or exists but is full -- rather than
+      // failing the connection attempt (and forcing the app to retry against
+      // a different server itself), automatically fall back to another
+      // available server here. This is what makes app-side failover actually
+      // reliable: previously a full preferred server would pass this check
+      // and only fail later during atomic address reservation below, wasting
+      // a full round trip on a request that could never have succeeded.
+      const remaining = servers.filter((s) => s.id !== preferredServerId);
+      const withCapacity = remaining.filter(hasCapacity);
+      const pool = withCapacity.length > 0 ? withCapacity : remaining;
+      if (pool.length === 0) {
+        return res.status(404).json({ error: 'no matching server available' });
+      }
+      server = pool[Math.floor(Math.random() * pool.length)];
     }
   } else {
     const withCapacity = servers.filter(hasCapacity);
@@ -266,6 +290,7 @@ app.post('/api/register', rateLimit(20, 60_000), async (req, res) => {
   // registered on just gets the same assignment back, no duplicate peers.
   const existing = store.getRegistration(devicePublicKey, server.id);
   if (existing) {
+    await store.touchRegistration(devicePublicKey, server.id);
     return res.json(buildResponse(server, existing.assignedAddress, false, existing.registrationToken || ""));
   }
 
@@ -376,8 +401,52 @@ const PORT = process.env.PORT || 8080;
 // API is only reachable through the local Nginx reverse proxy, never directly
 // from the internet.
 const HOST = process.env.HOST || '0.0.0.0';
+
+// Reclaims registration slots from devices that never called /api/unregister --
+// e.g. the app's process was killed before it could deregister (see
+// MANUAL_TESTING.md). Actually removes the peer from the VPS agent first, not
+// just the local bookkeeping, so a re-used IP never ends up assigned to two
+// peers at once. One unreachable/misbehaving VPS logs an error and does not
+// stop the sweep from pruning stale registrations on other servers.
+async function pruneStaleRegistrations() {
+  const stale = store.findStaleRegistrations(STALE_REGISTRATION_MAX_AGE_MS);
+  if (stale.length === 0) return;
+  console.log(`Pruning ${stale.length} stale registration(s) (unseen for 30+ days)...`);
+  const servers = serverStore.loadServers();
+  for (const reg of stale) {
+    const server = servers.find((s) => s.id === reg.serverId);
+    if (!server) {
+      // Server itself no longer exists -- nothing to tell an agent, just drop the row.
+      await store.removeRegistrationByKey(reg.devicePublicKey, reg.serverId);
+      continue;
+    }
+    try {
+      const agentResp = await fetch(`${server.agentUrl}/remove-peer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Api-Key': server.agentApiKey },
+        body: JSON.stringify({ publicKey: reg.devicePublicKey }),
+      });
+      if (!agentResp.ok && agentResp.status !== 404) {
+        throw new Error(`agent responded ${agentResp.status}`);
+      }
+      await store.removeRegistrationByKey(reg.devicePublicKey, reg.serverId);
+      console.log(`  pruned stale registration on ${reg.serverId}`);
+    } catch (err) {
+      // Leave this one for the next sweep rather than dropping the row while
+      // the real peer might still exist on an unreachable VPS.
+      console.error(`  failed to prune stale registration on ${reg.serverId}:`, err.message);
+    }
+  }
+}
+
 app.listen(PORT, HOST, () => {
   console.log(`FastVPN control API listening on ${HOST}:${PORT}`);
   console.log(`Dashboard: http://<this-server-ip>:${PORT}/`);
   console.log(`Admin key (needed once per VPS, printed again by: cat ${ADMIN_CONFIG_PATH}): ${adminConfig.adminKey}`);
+
+  // Run once shortly after startup (not immediately -- give the process a
+  // moment to settle) and then daily. A daily cadence is frequent enough
+  // relative to the 30-day threshold without adding meaningful load.
+  setTimeout(pruneStaleRegistrations, 60_000);
+  setInterval(pruneStaleRegistrations, 24 * 60 * 60 * 1000);
 });
