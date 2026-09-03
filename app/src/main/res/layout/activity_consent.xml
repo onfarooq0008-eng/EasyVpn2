@@ -121,7 +121,7 @@
         android:layout_margin="24dp"
         android:backgroundTint="#00000000"
         app:strokeColor="@color/white"
-        app:strokeWidth="1.5"
+        app:strokeWidth="1.5dp"
         android:text="I Agree And Continue"
         android:textAllCaps="false"
         android:textColor="@color/white"
