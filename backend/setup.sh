@@ -572,7 +572,7 @@ if ! systemctl is-active --quiet fastvpn-agent; then
   journalctl -u fastvpn-agent --no-pager -n 30
   exit 1
 fi
-if ! curl -s -f "http://localhost:${AGENT_PORT}/health" > /dev/null; then
+if ! curl -s -f -H "X-Api-Key: ${AGENT_API_KEY}" "http://localhost:${AGENT_PORT}/health" > /dev/null; then
   echo ""
   echo "############################################################"
   echo " FAILED: the agent is running but isn't answering on port"
