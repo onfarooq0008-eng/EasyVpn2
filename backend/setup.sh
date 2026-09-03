@@ -24,6 +24,16 @@
 #       --admin-key PASTE_FROM_STEP_1 \
 #       --country "United Kingdom" --country-code GB --city London
 #
+#     If the brain was set up with --domain (HTTPS), use its https:// domain
+#     for --api-url instead, and also pass --api-ip with the brain's real IP
+#     (printed by --role api --domain as "Origin IP") -- needed for this
+#     node's firewall rule, since the domain may be Cloudflare-proxied:
+#     sudo bash setup.sh --role node \
+#       --api-url https://api.yourdomain.com \
+#       --api-ip YOUR_API_VPS_IP \
+#       --admin-key PASTE_FROM_STEP_1 \
+#       --country "United Kingdom" --country-code GB --city London
+#
 # That's the entire setup: one command on your brain VPS, one command per
 # other VPS. Nothing to edit by hand.
 # ============================================================================
@@ -31,6 +41,7 @@ set -e
 
 ROLE=""
 API_URL=""
+API_IP=""
 ADMIN_KEY=""
 COUNTRY_NAME="Unknown"
 COUNTRY_CODE="US"
@@ -49,6 +60,14 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --role) ROLE="$2"; shift 2 ;;
     --api-url) API_URL="$2"; shift 2 ;;
+    # Only needed when --api-url is a domain (i.e. the brain was set up with
+    # --domain). The domain is used for the actual HTTPS API calls, but this
+    # script also needs to firewall-allow the brain's real server-to-server
+    # IP on the agent port below -- and if the domain is Cloudflare-proxied,
+    # resolving it via DNS would give Cloudflare's edge IP, not the brain's
+    # actual IP, so it has to be passed explicitly instead. Not needed when
+    # --api-url is already a bare IP (http://1.2.3.4:8080 style).
+    --api-ip) API_IP="$2"; shift 2 ;;
     --admin-key) ADMIN_KEY="$2"; shift 2 ;;
     --country) COUNTRY_NAME="$2"; shift 2 ;;
     --country-code) COUNTRY_CODE="$2"; shift 2 ;;
@@ -78,7 +97,7 @@ if [[ "$ROLE" != "api" && "$ROLE" != "node" ]]; then
   echo "Usage:"
   echo "  sudo bash setup.sh --role api"
   echo "  sudo bash setup.sh --role api --domain api.yourdomain.com [--cf-cert <path>] [--cf-key <path>] [--cf-only]"
-  echo "  sudo bash setup.sh --role node --api-url <url> --admin-key <key> --country <name> --country-code <cc> [--city <city>] [--name <name>]"
+  echo "  sudo bash setup.sh --role node --api-url <url> [--api-ip <brain's real IP, required if --api-url is a domain>] --admin-key <key> --country <name> --country-code <cc> [--city <city>] [--name <name>]"
   exit 1
 fi
 
@@ -394,12 +413,17 @@ EOF
     echo " Dashboard: ${PUBLIC_URL}/"
     echo "   Log in with this admin key: ${ADMIN_KEY_GENERATED}"
     echo ""
+    echo " Origin IP (for --api-ip on node setups below): ${MY_IP}"
+    echo " -- every --role node command needs this, since it's a domain, not"
+    echo " a bare IP; see the comment above the --api-ip flag if curious why."
+    echo ""
     echo " Now run this SAME script with --role node on EVERY OTHER VPS"
     echo " (fill in --country / --country-code / --city for each one) --"
     echo " the dashboard also shows this exact command, ready to copy:"
     echo ""
     echo "   sudo bash setup.sh --role node \\"
     echo "     --api-url ${PUBLIC_URL} \\"
+    echo "     --api-ip ${MY_IP} \\"
     echo "     --admin-key ${ADMIN_KEY_GENERATED} \\"
     echo "     --country \"United Kingdom\" --country-code GB --city London"
     echo ""
@@ -583,17 +607,40 @@ if ! curl -s -f -H "X-Api-Key: ${AGENT_API_KEY}" "http://localhost:${AGENT_PORT}
 fi
 echo "==> Verified: the agent is running and responding."
 
-# Restrict the agent port to ONLY the brain API's IP, extracted from --api-url,
-# rather than opening it to the whole internet -- nobody else has any reason
-# to reach this port, and it accepts commands that add WireGuard peers.
+# Restrict the agent port to ONLY the brain API's IP, rather than opening it
+# to the whole internet -- nobody else has any reason to reach this port, and
+# it accepts commands that add WireGuard peers. The brain talks to this
+# agent directly (server-to-server, http://<brain-ip>:8080-style calls made
+# from server.js -- never through Cloudflare/Nginx even when --api-url is an
+# HTTPS domain), so what we need here is the brain's real IP, not whatever
+# --api-url resolves to.
 BRAIN_HOST=$(echo "${API_URL}" | sed -E 's#^[a-zA-Z]+://##; s#[:/].*$##')
-if [[ -n "$BRAIN_HOST" ]] && [[ "$BRAIN_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  ufw allow from "${BRAIN_HOST}" to any port ${AGENT_PORT} proto tcp
+if [[ "$BRAIN_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  # --api-url was already a bare IP (plain-HTTP brain, no --domain) -- use it
+  # directly, same as before.
+  BRAIN_FIREWALL_IP="$BRAIN_HOST"
+elif [[ -n "$API_IP" ]]; then
+  # --api-url is a domain (brain was set up with --domain) -- we can't just
+  # resolve the domain ourselves: if it's Cloudflare-proxied (the setup this
+  # script assumes for --domain), DNS would hand back Cloudflare's edge IP,
+  # not the brain's actual IP, and the firewall rule below would silently
+  # allow the wrong host (or block the real one). --api-ip must be the
+  # brain's real IP instead -- printed by `setup.sh --role api --domain ...`
+  # as "Origin IP (for --api-ip on node setups)".
+  if [[ ! "$API_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "ERROR: --api-ip must be a bare IPv4 address, got: $API_IP"
+    exit 1
+  fi
+  BRAIN_FIREWALL_IP="$API_IP"
 else
-  echo "ERROR: API URL host must be an IPv4 address for the agent firewall allow-list: $API_URL"
-  echo "Refusing to expose port ${AGENT_PORT} publicly."
+  echo "ERROR: --api-url ($API_URL) is a domain, not a bare IP."
+  echo "Since the brain's agent-facing calls bypass Cloudflare/Nginx entirely,"
+  echo "this script can't safely resolve that domain to firewall-allow the"
+  echo "right host. Re-run with --api-ip <brain's real IPv4>, e.g. the"
+  echo "\"Origin IP\" printed when you ran --role api --domain on the brain."
   exit 1
 fi
+ufw allow from "${BRAIN_FIREWALL_IP}" to any port ${AGENT_PORT} proto tcp
 
 MY_IP=$(curl -s -4 ifconfig.me)
 AGENT_URL="http://${MY_IP}:${AGENT_PORT}"
