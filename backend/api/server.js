@@ -69,6 +69,21 @@ const app = express();
 app.set('trust proxy', 'loopback');
 
 app.use(express.json({ limit: '10kb' })); // small, deliberate cap -- nothing we accept needs to be bigger
+
+// Every response here is either live server/registration state (which
+// changes constantly) or the dashboard shell that reads it -- none of it
+// should ever be cached. Without this, Express sends no Cache-Control at
+// all, and some mobile browsers then reuse a stale cached response for a
+// GET to the same URL (e.g. the dashboard's 10s poll of /api/admin/dashboard)
+// even though the underlying data has since changed -- e.g. right after a
+// full backend wipe/reinstall, an old cached response can make the
+// dashboard briefly show pre-wipe data again despite the server having
+// none. `no-store` forbids caching it anywhere, full stop.
+app.use((req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
 app.use(express.static(PUBLIC_DIR));
 
 // express.static only auto-serves a file literally named "index.html" for
