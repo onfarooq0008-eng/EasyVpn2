@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shield (security) with a lightning-bolt cutout (speed), matching the "Connect
+     to fastest server" / security framing already used throughout the app itself.
+     The bolt is a true hole (evenOdd fill) in the white shield, so it shows
+     whatever sits underneath: the gradient from ic_launcher_background.xml. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M54.0,25.67 L30.0,36.33 V52.33 C30.0,67.13 40.24,80.97 54.0,84.33 C67.76,80.97 78.0,67.13 78.0,52.33 V36.33 L54.0,25.67 Z
+                           M44.5,36.0 L44.5,56.9 L50.2,56.9 L50.2,74.0 L63.5,51.2 L55.9,51.2 L63.5,36.0 Z" />
+</vector>

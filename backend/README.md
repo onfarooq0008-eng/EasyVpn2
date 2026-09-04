@@ -103,11 +103,13 @@ Open `http://<brain-vps-ip>:8080/` in **your phone's browser** — no
 terminal, no `curl`. Log in with the admin key from Step 1 (it remembers it
 after that) and you'll see:
 
-- Every connected VPS, with a live green/red dot (checked in real time, not
-  just "was it registered once")
+- Every connected VPS, with a green/red dot (checked in the background every
+  60 seconds, not just "was it registered once") and a "checked Xs ago" note
+  so you can see how fresh that is
 - How many devices are registered on each one
 - The exact command to add your next VPS, with the URL and admin key already
-  filled in — just copy, paste onto the new VPS, and fill in the country
+  filled in — just copy, paste onto the new VPS, and fill in the country. It
+  shows up on the dashboard within a few seconds of the script finishing.
 
 It refreshes automatically every 10 seconds.
 

@@ -148,6 +148,18 @@
         document.getElementById('loginBox').classList.remove('hidden');
         return;
       }
+      if (!resp.ok) {
+        // e.g. 429 (rate limited -- several tabs open) or a server-side error.
+        // This used to fall through to renderDashboard() with an error body
+        // shaped nothing like {servers, totalServers, ...}; that threw and
+        // was silently swallowed by the catch below, leaving the stats stuck
+        // on the page's original "-" placeholders with no visible reason why.
+        let detail = '';
+        try { detail = (await resp.json()).error || ''; } catch (_) { /* body wasn't JSON */ }
+        document.getElementById('lastUpdated').textContent =
+          'Could not refresh (HTTP ' + resp.status + (detail ? ': ' + detail : '') + ') -- will retry.';
+        return;
+      }
       const data = await resp.json();
       renderDashboard(data);
     } catch (e) {
@@ -178,7 +190,7 @@
           '<div class="dot ' + (s.healthy ? 'up' : 'down') + '"></div>' +
           '<div class="server-info">' +
             '<div class="server-name">' + flagFor(s.countryCode) + ' ' + escapeHtml(s.name) + '</div>' +
-            '<div class="server-detail">' + escapeHtml(s.countryName) + (s.city ? ' • ' + escapeHtml(s.city) : '') + ' • ' + escapeHtml(s.endpointHost) + '</div>' +
+            '<div class="server-detail">' + escapeHtml(s.countryName) + (s.city ? ' • ' + escapeHtml(s.city) : '') + ' • ' + escapeHtml(s.endpointHost) + ' • checked ' + timeAgo(s.lastCheckedAt) + '</div>' +
           '</div>' +
           '<div class="server-count">' +
             '<div class="row"><span class="n connected">' + connectedLabel + '</span> <span style="color:#8a8a8a;">connected</span></div>' +
@@ -189,6 +201,14 @@
     }
 
     document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  }
+
+  function timeAgo(ms) {
+    if (!ms) return 'just now';
+    const secs = Math.max(0, Math.round((Date.now() - ms) / 1000));
+    if (secs < 5) return 'just now';
+    if (secs < 60) return secs + 's ago';
+    return Math.round(secs / 60) + 'm ago';
   }
 
   function flagFor(countryCode) {

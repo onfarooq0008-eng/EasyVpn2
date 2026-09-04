@@ -113,6 +113,28 @@ async function checkAgentHealth(agentUrl, agentApiKey) {
   }
 }
 
+// --- Health cache ------------------------------------------------------------
+// Previously, EVERY dashboard load/poll called checkAgentHealth() live, for
+// every registered server, on every single request -- with N servers and a
+// 4s-per-check timeout, that meant every open dashboard tab (polling every
+// 10s) fired N outbound network calls each time, and the whole thing got
+// slower and less reliable the more VPS you added (and easier to accidentally
+// trip the rate limiter with a couple of tabs open). Now only the background
+// sweep below ever calls an agent directly; every request-time consumer
+// (dashboard, capacity checks) just reads this in-memory cache, so responses
+// are instant and adding more VPS never slows anything down.
+const healthCache = new Map(); // serverId -> { healthy, peerCount, activePeerCount, checkedAt }
+
+async function refreshServerHealth(server) {
+  const health = await checkAgentHealth(server.agentUrl, server.agentApiKey);
+  healthCache.set(server.id, { ...health, checkedAt: Date.now() });
+  return health;
+}
+
+function getCachedHealth(serverId) {
+  return healthCache.get(serverId) || { healthy: false, peerCount: -1, activePeerCount: -1, checkedAt: null };
+}
+
 // --- Auto-remove offline VPS ------------------------------------------------
 // Runs in the background regardless of whether anyone has the dashboard open.
 // A VPS that's been destroyed, reimaged, or just firewalled off is worse than
@@ -126,11 +148,14 @@ const consecutiveFailures = new Map(); // serverId -> count (in-memory, resets o
 
 async function runHealthSweep() {
   const servers = serverStore.loadServers();
-  for (const s of servers) {
-    const health = await checkAgentHealth(s.agentUrl, s.agentApiKey);
+  // Checked concurrently (same as the old per-dashboard-request check was)
+  // so a growing server list doesn't make each sweep take proportionally
+  // longer -- worst case is still just the slowest single agent's timeout.
+  await Promise.all(servers.map(async (s) => {
+    const health = await refreshServerHealth(s);
     if (health.healthy) {
       consecutiveFailures.delete(s.id);
-      continue;
+      return;
     }
     const failures = (consecutiveFailures.get(s.id) || 0) + 1;
     if (failures >= OFFLINE_REMOVAL_THRESHOLD) {
@@ -144,43 +169,49 @@ async function runHealthSweep() {
     } else {
       consecutiveFailures.set(s.id, failures);
     }
-  }
+  }));
 }
 
 let sweepRunning = false;
-setInterval(() => {
+function triggerHealthSweep() {
   if (sweepRunning) return; // don't overlap sweeps if one is still checking a slow/unreachable agent
   sweepRunning = true;
   runHealthSweep()
     .catch((err) => console.error('Health sweep failed:', err.message))
     .finally(() => { sweepRunning = false; });
-}, HEALTH_SWEEP_INTERVAL_MS);
+}
+setInterval(triggerHealthSweep, HEALTH_SWEEP_INTERVAL_MS);
+triggerHealthSweep(); // also run once immediately at startup, instead of leaving the dashboard showing everything as unhealthy for up to the first 60s
 
-// Dashboard data -- the web UI (public/dashboard.html) polls this. Checks
-// every VPS's agent live, so "connected" really means reachable right now,
-// not just "was registered at some point."
-app.get('/api/admin/dashboard', rateLimit(60, 60_000), requireAdminAccess, async (req, res) => {
+// Dashboard data -- the web UI (public/dashboard.html) polls this. Reads the
+// health cache (refreshed every HEALTH_SWEEP_INTERVAL_MS in the background),
+// so "connected" reflects the last sweep -- at most ~60s old, not a live
+// check on every request. See the health cache comment above for why.
+app.get('/api/admin/dashboard', rateLimit(120, 60_000), requireAdminAccess, (req, res) => {
   const servers = serverStore.loadServers();
   const counts = store.registrationCounts();
 
-  const withHealth = await Promise.all(
-    servers.map(async (s) => {
-      const health = await checkAgentHealth(s.agentUrl, s.agentApiKey);
-      return {
-        id: s.id,
-        name: s.name,
-        countryName: s.countryName,
-        countryCode: s.countryCode,
-        city: s.city,
-        endpointHost: s.endpointHost,
-        endpointPort: s.endpointPort,
-        healthy: health.healthy,
-        peerCount: health.peerCount,
-        activePeerCount: health.activePeerCount,
-        registeredDevices: counts.byServer[s.id] || 0,
-      };
-    })
-  );
+  // Reads the health cache kept warm by the background sweep (see above)
+  // instead of calling every VPS agent live -- this makes the response
+  // instant no matter how many VPS are registered, and keeps multiple open
+  // dashboard tabs (each polling every 10s) comfortably under the rate limit.
+  const withHealth = servers.map((s) => {
+    const health = getCachedHealth(s.id);
+    return {
+      id: s.id,
+      name: s.name,
+      countryName: s.countryName,
+      countryCode: s.countryCode,
+      city: s.city,
+      endpointHost: s.endpointHost,
+      endpointPort: s.endpointPort,
+      healthy: health.healthy,
+      peerCount: health.peerCount,
+      activePeerCount: health.activePeerCount,
+      registeredDevices: counts.byServer[s.id] || 0,
+      lastCheckedAt: health.checkedAt,
+    };
+  });
 
   const totalConnectedDevices = withHealth.reduce(
     (sum, s) => sum + (s.activePeerCount > 0 ? s.activePeerCount : 0),
@@ -222,6 +253,12 @@ app.post('/api/admin/add-server', rateLimit(10, 60_000), requireAdminKey, async 
   const saved = await serverStore.upsertServer(entry);
   console.log(`Registered server ${saved.id} (${saved.countryName})`);
   res.json({ ok: true, id: saved.id });
+  // Check it right away instead of leaving it as "unhealthy" in the cache
+  // until the next scheduled sweep (up to 60s) -- so a freshly-added VPS
+  // shows up correctly on the dashboard within a couple of seconds.
+  refreshServerHealth(saved).catch((err) =>
+    console.error(`Initial health check for ${saved.id} failed:`, err.message)
+  );
 });
 
 // Public: what the app's server list shows. Deliberately excludes agentUrl

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Same gradient as the in-app hero card (see drawable/bg_hero.xml) so the
+     launcher icon and splash screen match the connect screen you see right
+     after opening the app. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <gradient
+        android:angle="135"
+        android:startColor="@color/heroStart"
+        android:endColor="@color/heroEnd" />
+</shape>

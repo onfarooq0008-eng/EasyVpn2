@@ -104,6 +104,16 @@ if [[ "$ROLE" == "api" ]]; then
 
   INSTALL_DIR="/opt/fastvpn-api"
   echo "==> Setting up the control API at ${INSTALL_DIR}..."
+
+  # Re-running this script (e.g. to pick up an updated server.js/dashboard.html)
+  # stops the old service first, THEN copies the new files and starts it back
+  # up -- so the running process is always either the old code or the new
+  # code, never a half-updated mix, and you never end up with two copies
+  # fighting over the same port. Safe on a brand-new machine too: stopping a
+  # service that was never installed is just a harmless no-op.
+  echo "==> Stopping any existing fastvpn-api service first..."
+  systemctl stop fastvpn-api 2>/dev/null || true
+
   mkdir -p "${INSTALL_DIR}/data"
   cp "${SCRIPT_DIR}/api/server.js" "${INSTALL_DIR}/server.js"
   cp "${SCRIPT_DIR}/api/store.js" "${INSTALL_DIR}/store.js"
@@ -147,7 +157,7 @@ EOF
 
   systemctl daemon-reload
   systemctl enable fastvpn-api
-  systemctl restart fastvpn-api
+  systemctl start fastvpn-api
   sleep 2 # give it a moment to start and generate its admin key on first boot
 
   # Actually verify the service is alive and answering, rather than just
@@ -521,6 +531,14 @@ systemctl enable wg-quick@${WG_IFACE}
 systemctl restart wg-quick@${WG_IFACE}
 
 echo "==> Installing the agent (the only thing allowed to add WireGuard peers here)..."
+
+# Same reasoning as the api role: stop the old service first so a re-run
+# (e.g. to pick up an updated agent.js) always starts completely fresh
+# instead of overlapping with whatever's currently running. Harmless no-op
+# on a brand-new machine where the service doesn't exist yet.
+echo "==> Stopping any existing fastvpn-agent service first..."
+systemctl stop fastvpn-agent 2>/dev/null || true
+
 install_node_runtime
 AGENT_DIR="/opt/fastvpn-agent"
 mkdir -p "${AGENT_DIR}"
@@ -558,7 +576,7 @@ EOF
 
 systemctl daemon-reload
 systemctl enable fastvpn-agent
-systemctl restart fastvpn-agent
+systemctl start fastvpn-agent
 sleep 1
 
 # Actually verify the agent started, rather than assuming success and only
