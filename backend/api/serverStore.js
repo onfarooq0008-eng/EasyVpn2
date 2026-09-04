@@ -58,4 +58,31 @@ async function removeServer(id) {
   });
 }
 
-module.exports = { loadServers, saveServers, upsertServer, idForHost, removeServer };
+/** Look up a single server by id. */
+function getServer(id) {
+  return loadServers().find((s) => s.id === id) || null;
+}
+
+/** Patches display metadata only (name/countryName/countryCode/city/dns) --
+ *  never endpointHost/serverPublicKey/agentUrl/agentApiKey, since changing
+ *  those would silently point the API at a different machine than the one
+ *  that actually holds the WireGuard keys/peers. To change connection
+ *  details, re-run setup.sh on that VPS instead (it upserts by endpointHost).
+ *  Returns the updated server, or null if the id doesn't exist. */
+async function updateServer(id, patch) {
+  return withMutationLock(() => {
+    const servers = loadServers();
+    const idx = servers.findIndex((s) => s.id === id);
+    if (idx < 0) return null;
+    const allowed = ['name', 'countryName', 'countryCode', 'city', 'dns'];
+    const updated = { ...servers[idx] };
+    for (const field of allowed) {
+      if (patch[field] !== undefined && patch[field] !== '') updated[field] = patch[field];
+    }
+    servers[idx] = updated;
+    saveServers(servers);
+    return updated;
+  });
+}
+
+module.exports = { loadServers, saveServers, upsertServer, idForHost, removeServer, getServer, updateServer };

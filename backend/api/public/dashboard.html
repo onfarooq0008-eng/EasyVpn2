@@ -55,6 +55,27 @@
   .empty-msg { text-align: center; color: #8a8a8a; padding: 24px 0; }
   .error-msg { color: #C62828; font-size: 13px; margin-top: 8px; }
   .updated { font-size: 11px; color: #8a8a8a; text-align: center; margin-top: 8px; }
+  #searchBox {
+    width: 100%; padding: 10px 12px; font-size: 14px; border-radius: 10px;
+    border: 1px solid #ddd; margin-bottom: 12px;
+  }
+  .server-row { flex-wrap: wrap; }
+  .capacity-bar {
+    width: 100%; height: 4px; background: #eee; border-radius: 2px;
+    margin-top: 6px; overflow: hidden;
+  }
+  .capacity-fill { height: 100%; background: #1565C0; }
+  .capacity-fill.full { background: #C62828; }
+  .server-actions { width: 100%; display: flex; gap: 8px; margin-top: 8px; }
+  .server-actions button {
+    flex: 1; font-size: 12px; padding: 6px 8px; border-radius: 8px;
+    border: 1px solid #ddd; background: #fafafa; cursor: pointer;
+  }
+  .server-actions button.danger { color: #C62828; border-color: #f0c0c0; }
+  .edit-row { width: 100%; display: none; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .edit-row.open { display: flex; }
+  .edit-row input { flex: 1; min-width: 90px; padding: 6px 8px; font-size: 12px; border-radius: 6px; border: 1px solid #ccc; }
+  .edit-row button { padding: 6px 12px; font-size: 12px; border-radius: 6px; border: none; background: #1565C0; color: #fff; cursor: pointer; }
 </style>
 </head>
 <body>
@@ -87,6 +108,7 @@
   </div>
 
   <div class="card">
+    <input id="searchBox" type="text" placeholder="Search by name, country, or city..." oninput="renderDashboard(lastData)">
     <div id="serverList"></div>
     <div id="emptyMsg" class="empty-msg hidden">No VPS registered yet. Run setup.sh --role node on one to see it here.</div>
   </div>
@@ -104,6 +126,7 @@
 <script type="module">
   let adminKey = localStorage.getItem('fastvpn_admin_key') || '';
   let refreshTimer = null;
+  let lastData = { servers: [] };
 
   if (adminKey) {
     showDashboard();
@@ -161,6 +184,7 @@
         return;
       }
       const data = await resp.json();
+      lastData = data;
       renderDashboard(data);
     } catch (e) {
       document.getElementById('lastUpdated').textContent = 'Could not reach the API just now -- will retry.';
@@ -176,16 +200,29 @@
     const emptyMsg = document.getElementById('emptyMsg');
     list.innerHTML = '';
 
+    const query = (document.getElementById('searchBox').value || '').trim().toLowerCase();
+    const servers = query
+      ? data.servers.filter((s) =>
+          (s.name + ' ' + s.countryName + ' ' + s.city).toLowerCase().includes(query))
+      : data.servers;
+
     if (data.servers.length === 0) {
       emptyMsg.classList.remove('hidden');
+      emptyMsg.textContent = 'No VPS registered yet. Run setup.sh --role node on one to see it here.';
+    } else if (servers.length === 0) {
+      emptyMsg.classList.remove('hidden');
+      emptyMsg.textContent = 'No servers match "' + query + '".';
     } else {
       emptyMsg.classList.add('hidden');
-      data.servers.forEach((s) => {
+      servers.forEach((s) => {
         const row = document.createElement('div');
         row.className = 'server-row';
         // activePeerCount comes from the agent's WireGuard handshake check --
         // -1 means an older agent that doesn't report it, so fall back to a dash.
         const connectedLabel = s.healthy && s.activePeerCount >= 0 ? s.activePeerCount : '-';
+        const max = s.maxRegistrations || 200;
+        const pct = Math.min(100, Math.round((s.registeredDevices / max) * 100));
+        const editId = 'edit-' + s.id;
         row.innerHTML =
           '<div class="dot ' + (s.healthy ? 'up' : 'down') + '"></div>' +
           '<div class="server-info">' +
@@ -194,7 +231,19 @@
           '</div>' +
           '<div class="server-count">' +
             '<div class="row"><span class="n connected">' + connectedLabel + '</span> <span style="color:#8a8a8a;">connected</span></div>' +
-            '<div class="row"><span class="n">' + s.registeredDevices + '</span> <span style="color:#8a8a8a;">registered</span></div>' +
+            '<div class="row"><span class="n">' + s.registeredDevices + '</span>/' + max + ' <span style="color:#8a8a8a;">slots</span></div>' +
+          '</div>' +
+          '<div class="capacity-bar"><div class="capacity-fill ' + (pct >= 90 ? 'full' : '') + '" style="width:' + pct + '%"></div></div>' +
+          '<div class="server-actions">' +
+            '<button onclick="recheckServer(\'' + s.id + '\')">Recheck</button>' +
+            '<button onclick="toggleEdit(\'' + editId + '\')">Edit</button>' +
+            '<button class="danger" onclick="removeServer(\'' + s.id + '\', ' + JSON.stringify(s.name) + ')">Remove</button>' +
+          '</div>' +
+          '<div class="edit-row" id="' + editId + '">' +
+            '<input id="' + editId + '-name" placeholder="Name" value="' + escapeHtml(s.name) + '">' +
+            '<input id="' + editId + '-country" placeholder="Country" value="' + escapeHtml(s.countryName) + '">' +
+            '<input id="' + editId + '-city" placeholder="City" value="' + escapeHtml(s.city || '') + '">' +
+            '<button onclick="saveEdit(\'' + s.id + '\', \'' + editId + '\')">Save</button>' +
           '</div>';
         list.appendChild(row);
       });
@@ -202,6 +251,47 @@
 
     document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
   }
+
+  window.toggleEdit = function (editId) {
+    document.getElementById(editId).classList.toggle('open');
+  };
+
+  window.recheckServer = async function (id) {
+    try {
+      await fetch('/api/admin/recheck-server', {
+        method: 'POST',
+        headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      refresh();
+    } catch (e) { /* next scheduled refresh will pick it up */ }
+  };
+
+  window.removeServer = async function (id, name) {
+    if (!confirm('Remove ' + name + ' from the server list? Devices already connected to it are unaffected.')) return;
+    try {
+      const resp = await fetch('/api/admin/remove-server', {
+        method: 'POST',
+        headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (resp.ok) refresh();
+    } catch (e) { document.getElementById('lastUpdated').textContent = 'Could not remove server -- try again.'; }
+  };
+
+  window.saveEdit = async function (id, editId) {
+    const name = document.getElementById(editId + '-name').value.trim();
+    const countryName = document.getElementById(editId + '-country').value.trim();
+    const city = document.getElementById(editId + '-city').value.trim();
+    try {
+      const resp = await fetch('/api/admin/update-server', {
+        method: 'POST',
+        headers: { ...(await authHeaders()), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name, countryName, city }),
+      });
+      if (resp.ok) refresh();
+    } catch (e) { document.getElementById('lastUpdated').textContent = 'Could not save changes -- try again.'; }
+  };
 
   function timeAgo(ms) {
     if (!ms) return 'just now';

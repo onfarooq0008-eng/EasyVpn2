@@ -209,6 +209,7 @@ app.get('/api/admin/dashboard', rateLimit(120, 60_000), requireAdminAccess, (req
       peerCount: health.peerCount,
       activePeerCount: health.activePeerCount,
       registeredDevices: counts.byServer[s.id] || 0,
+      maxRegistrations: MAX_REGISTRATIONS_PER_SERVER,
       lastCheckedAt: health.checkedAt,
     };
   });
@@ -259,6 +260,50 @@ app.post('/api/admin/add-server', rateLimit(10, 60_000), requireAdminKey, async 
   refreshServerHealth(saved).catch((err) =>
     console.error(`Initial health check for ${saved.id} failed:`, err.message)
   );
+});
+
+// Lets an admin rename a server / fix its displayed country or city without
+// re-running setup.sh on the VPS -- connection fields (host, keys, agent
+// creds) are intentionally not editable here, see serverStore.updateServer.
+app.post('/api/admin/update-server', rateLimit(30, 60_000), requireAdminAccess, async (req, res) => {
+  const { id, name, countryName, countryCode, city, dns } = req.body || {};
+  if (typeof id !== 'string' || !id) return res.status(400).json({ error: 'missing id' });
+  if (countryCode !== undefined && countryCode !== '' && !/^[A-Za-z]{2}$/.test(countryCode)) {
+    return res.status(400).json({ error: 'countryCode must be 2 letters' });
+  }
+  const updated = await serverStore.updateServer(id, {
+    name, countryName, countryCode: countryCode ? countryCode.toUpperCase() : undefined, city, dns,
+  });
+  if (!updated) return res.status(404).json({ error: 'server not found' });
+  res.json({ ok: true, server: updated });
+});
+
+// Manually drops a VPS from the list -- e.g. you're decommissioning it on
+// purpose, rather than waiting for the health sweep to notice it's gone.
+// Existing devices registered on it keep their local WireGuard config and
+// can still connect directly until you shut the box down; they just won't
+// be offered as a choice to new registrations anymore.
+app.post('/api/admin/remove-server', rateLimit(30, 60_000), requireAdminAccess, async (req, res) => {
+  const { id } = req.body || {};
+  if (typeof id !== 'string' || !id) return res.status(400).json({ error: 'missing id' });
+  const removed = await serverStore.removeServer(id);
+  if (!removed) return res.status(404).json({ error: 'server not found' });
+  healthCache.delete(id);
+  consecutiveFailures.delete(id);
+  res.json({ ok: true });
+});
+
+// On-demand health check for one server -- lets the dashboard show a fresh
+// result immediately (e.g. right after you've fixed something on that VPS)
+// instead of waiting up to HEALTH_SWEEP_INTERVAL_MS for the next background
+// sweep to get to it.
+app.post('/api/admin/recheck-server', rateLimit(30, 60_000), requireAdminAccess, async (req, res) => {
+  const { id } = req.body || {};
+  const server = serverStore.getServer(id);
+  if (!server) return res.status(404).json({ error: 'server not found' });
+  const health = await refreshServerHealth(server);
+  consecutiveFailures.delete(server.id); // manual recheck resets the offline-removal counter
+  res.json({ ok: true, health });
 });
 
 // Public: what the app's server list shows. Deliberately excludes agentUrl
