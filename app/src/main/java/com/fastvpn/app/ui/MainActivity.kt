@@ -54,6 +54,7 @@ class MainActivity : AppCompatActivity() {
     private var pendingChain: List<Server>? = null
     private var connectedServer: Server? = null
     private var statsJob: Job? = null
+    private var refreshJob: Job? = null
     private var connectionFlowActive = false
 
     private val vpnPermissionLauncher = registerForActivityResult(
@@ -149,12 +150,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        // Stop polling backend.getStatistics() while backgrounded -- lifecycleScope
-        // only cancels this on onDestroy, not onStop/onPause, so without this the
-        // loop would keep running (and draining battery) the entire time the app
-        // sits in the background but isn't actually killed.
+        // Stop polling backend.getStatistics() and the server-list auto-refresh
+        // while backgrounded -- lifecycleScope only cancels these on onDestroy,
+        // not onStop/onPause, so without this the loops would keep running (and
+        // draining battery) the entire time the app sits in the background but
+        // isn't actually killed.
         statsJob?.cancel()
         statsJob = null
+        refreshJob?.cancel()
+        refreshJob = null
     }
 
     override fun onResume() {
@@ -183,11 +187,20 @@ class MainActivity : AppCompatActivity() {
         updateStatusCard()
         updateActionButton()
 
-        lifecycleScope.launch {
-            val fresh = serverSource.getServers()
-            fresh.forEach { s -> allServers.find { it.id == s.id }?.let { s.pingMs = it.pingMs } }
-            allServers = fresh
-            renderRows()
+        startServerAutoRefresh()
+    }
+
+    /** Keeps the server list (and its ping times) current the whole time the app is
+     *  in the foreground, instead of only refreshing once on open. Fires immediately,
+     *  then every [SERVER_REFRESH_INTERVAL_MS] after that; onPause() cancels this job
+     *  so it never keeps polling while backgrounded. */
+    private fun startServerAutoRefresh() {
+        refreshJob?.cancel()
+        refreshJob = lifecycleScope.launch {
+            while (true) {
+                refreshServers(showSpinner = false)
+                delay(SERVER_REFRESH_INTERVAL_MS)
+            }
         }
     }
 
@@ -201,8 +214,27 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadAndPing(onDone: (() -> Unit)? = null) {
         lifecycleScope.launch {
-            binding.swipeRefresh.isRefreshing = true
+            refreshServers(showSpinner = true)
+            onDone?.invoke()
+        }
+    }
+
+    /** Fetches the server list, re-pings every server, and re-renders. Used for the
+     *  initial load, pull-to-refresh, and the every-20s background auto-refresh.
+     *
+     *  On failure (backend timeout, no connection, etc.) this deliberately leaves
+     *  [allServers] as-is instead of clearing it -- previously a failed fetch set
+     *  it to an empty list, which wiped the whole screen to "No locations found"
+     *  on any transient hiccup. [showSpinner] also gates whether a failure shows a
+     *  toast: on for the visible pull-to-refresh/initial load, off for the silent
+     *  background tick so a flaky connection doesn't nag the user every 20 seconds. */
+    private suspend fun refreshServers(showSpinner: Boolean) {
+        if (showSpinner) binding.swipeRefresh.isRefreshing = true
+        try {
             val servers = serverSource.getServers()
+            // Carry over ping times we already measured so already-known servers
+            // don't flash back to "Checking..." on every refresh.
+            servers.forEach { s -> allServers.find { it.id == s.id }?.let { s.pingMs = it.pingMs } }
             allServers = servers
             renderRows()
             val targets = servers.map { Triple(it.id, it.endpointHost, 22) }
@@ -210,8 +242,16 @@ class MainActivity : AppCompatActivity() {
             servers.forEach { it.pingMs = results[it.id] ?: -2 }
             allServers = servers
             renderRows()
-            binding.swipeRefresh.isRefreshing = false
-            onDone?.invoke()
+        } catch (e: Exception) {
+            if (showSpinner) {
+                android.widget.Toast.makeText(
+                    this@MainActivity,
+                    "Couldn't refresh servers -- showing your last list.",
+                    android.widget.Toast.LENGTH_SHORT
+                ).show()
+            }
+        } finally {
+            if (showSpinner) binding.swipeRefresh.isRefreshing = false
         }
     }
 
@@ -620,5 +660,10 @@ class MainActivity : AppCompatActivity() {
         if (mb < 1024) return "%.1f MB".format(mb)
         val gb = mb / 1024.0
         return "%.2f GB".format(gb)
+    }
+
+    companion object {
+        /** How often the server list quietly refreshes itself while the app is open. */
+        private const val SERVER_REFRESH_INTERVAL_MS = 20_000L
     }
 }

@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.fastvpn.app.R
 import com.fastvpn.app.ads.AdManager
@@ -31,10 +32,36 @@ class HomeListAdapter(
     private val nativeAdCache = mutableMapOf<Int, NativeAd>()
 
     fun submit(newItems: List<HomeRow>, connectedServerId: String?) {
+        val oldItems = items.toList()
+        val connectedIdChanged = this.connectedServerId != connectedServerId
+        this.connectedServerId = connectedServerId
+        val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize() = oldItems.size
+            override fun getNewListSize() = newItems.size
+            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                rowKey(oldItems[oldItemPosition]) == rowKey(newItems[newItemPosition])
+            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                // Connecting/disconnecting changes the "✓" prefix on a server row
+                // without changing the Server data itself -- force a rebind on that
+                // (rare) transition instead of risking a stale checkmark.
+                if (connectedIdChanged) return false
+                return oldItems[oldItemPosition] == newItems[newItemPosition]
+            }
+        })
         items.clear()
         items.addAll(newItems)
-        this.connectedServerId = connectedServerId
-        notifyDataSetChanged()
+        // DiffUtil instead of notifyDataSetChanged(): now that the list also
+        // auto-refreshes every 20s (see MainActivity), a full reset would rebind
+        // every visible row -- including flashing native ads -- on every tick. This
+        // only touches rows that actually changed, so everything else (and scroll
+        // position) holds still.
+        diff.dispatchUpdatesTo(this)
+    }
+
+    private fun rowKey(row: HomeRow): Any = when (row) {
+        is HomeRow.Header -> "header_${row.group.countryCode}"
+        is HomeRow.ServerRow -> "server_${row.server.id}"
+        is HomeRow.NativeAdRow -> "ad_${row.slotId}"
     }
 
     /** Call from the host Activity's onDestroy to release native ad resources. */

@@ -31,8 +31,12 @@ data class BackendRegistration(
 class BackendApiClient {
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
+        // Kept short on purpose: the app now re-polls /api/servers every 20s
+        // (see MainActivity.SERVER_REFRESH_INTERVAL_MS), so a slow/unreachable
+        // backend should fail fast and let the next tick try again, rather than
+        // hanging most of that 20s window on one stuck request.
+        .connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(8, TimeUnit.SECONDS)
         .build()
 
     suspend fun fetchServers(baseUrl: String): List<Server> = withContext(Dispatchers.IO) {
