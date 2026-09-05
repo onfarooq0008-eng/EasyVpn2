@@ -87,11 +87,20 @@ app.use((req, res, next) => {
 app.use(express.static(PUBLIC_DIR));
 
 // express.static only auto-serves a file literally named "index.html" for
-// the root URL -- ours is dashboard.html, so this explicit route is needed
-// or GET / returns 404 "Cannot GET /".
+// the root URL -- that's now our public marketing page (public/index.html).
+// The admin panel lives at /adminui instead, not on public root, so it isn't
+// the first thing a random visitor to the domain lands on.
 app.get('/', (req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, 'dashboard.html'));
+  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
+
+app.get('/adminui', (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'adminui.html'));
+});
+
+// Anyone with the old /dashboard.html bookmark (from before the admin panel
+// moved) lands in the right place instead of a 404.
+app.get('/dashboard.html', (req, res) => res.redirect(301, '/adminui'));
 
 function requireAdminKey(req, res, next) {
   if (req.header('X-Admin-Key') !== adminConfig.adminKey) {

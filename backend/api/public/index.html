@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FastVPN — Connect anywhere, actually fast</title>
+<meta name="description" content="A no-log VPN built for speed. Encrypted WireGuard tunnels across a growing set of global servers.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B1226;
+    --panel: #121B36;
+    --panel-line: #202B4D;
+    --text: #EDEFF5;
+    --muted: #8791AC;
+    --accent: #FFB020;
+    --accent-dim: #7A5A1F;
+    --ok: #3DDC97;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, Roboto, sans-serif;
+    line-height: 1.55;
+  }
+  h1, h2, h3, .wordmark {
+    font-family: 'Space Grotesk', -apple-system, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; }
+  }
+
+  /* Nav */
+  nav {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(11,18,38,0.88); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--panel-line);
+  }
+  nav .row { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; }
+  .wordmark { font-size: 19px; }
+  .wordmark span { color: var(--accent); }
+  .nav-links { display: flex; gap: 28px; font-size: 14px; color: var(--muted); }
+  .nav-links a:hover { color: var(--text); }
+  .nav-cta {
+    background: var(--accent); color: #1a1200; font-weight: 600; font-size: 14px;
+    padding: 9px 16px; border-radius: 8px; text-decoration: none; white-space: nowrap;
+  }
+  @media (max-width: 720px) { .nav-links { display: none; } }
+
+  /* Hero */
+  .hero { padding: 72px 0 56px; position: relative; overflow: hidden; }
+  .hero-grid { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: center; }
+  @media (max-width: 860px) { .hero-grid { grid-template-columns: 1fr; } }
+  .live-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--panel); border: 1px solid var(--panel-line);
+    padding: 6px 12px; border-radius: 999px; font-size: 13px; color: var(--muted);
+    margin-bottom: 22px;
+  }
+  .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex-shrink: 0; }
+  .live-dot.pulse { animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  h1 { font-size: 46px; line-height: 1.08; max-width: 15ch; }
+  @media (max-width: 500px) { h1 { font-size: 34px; } }
+  .hero p.lead { font-size: 17px; color: var(--muted); max-width: 46ch; margin: 18px 0 30px; }
+  .cta-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn-primary {
+    background: var(--accent); color: #1a1200; font-weight: 600; font-size: 15px;
+    padding: 13px 22px; border-radius: 9px; text-decoration: none; display: inline-block;
+    border: 1px solid var(--accent);
+  }
+  .btn-primary.disabled { background: transparent; color: var(--muted); border-color: var(--panel-line); pointer-events: none; }
+  .btn-secondary {
+    color: var(--text); font-size: 15px; padding: 13px 22px; border-radius: 9px;
+    text-decoration: none; border: 1px solid var(--panel-line);
+  }
+  .btn-secondary:hover { border-color: var(--muted); }
+
+  /* Dot map visual */
+  .map-wrap { display: flex; justify-content: center; }
+  .map-wrap svg { width: 100%; max-width: 420px; height: auto; }
+  .map-dot { fill: var(--panel-line); }
+  .map-dot.on { fill: var(--accent); }
+  .map-dot.pulse { animation: dotpulse 2.6s ease-in-out infinite; }
+  @keyframes dotpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .map-line { stroke: var(--panel-line); stroke-width: 1; }
+
+  /* Sections */
+  section { padding: 64px 0; border-top: 1px solid var(--panel-line); }
+  .eyebrow-free h2 { font-size: 28px; margin-bottom: 10px; }
+  section > .wrap > p.section-lead { color: var(--muted); font-size: 15px; max-width: 52ch; margin: 0 0 40px; }
+
+  .feature-row {
+    display: grid; grid-template-columns: 200px 1fr; gap: 24px;
+    padding: 26px 0; border-top: 1px solid var(--panel-line);
+  }
+  .feature-row:first-of-type { border-top: none; }
+  @media (max-width: 640px) { .feature-row { grid-template-columns: 1fr; gap: 8px; } }
+  .feature-row h3 { font-size: 17px; color: var(--accent); }
+  .feature-row p { margin: 0; color: var(--muted); font-size: 15px; max-width: 56ch; }
+
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+  .step .num { font-family: 'Space Grotesk', sans-serif; font-size: 13px; color: var(--accent-dim); margin-bottom: 10px; }
+  .step h3 { font-size: 17px; margin-bottom: 8px; }
+  .step p { color: var(--muted); font-size: 14.5px; margin: 0; }
+
+  footer { padding: 32px 0 48px; }
+  footer .row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+  footer .links { display: flex; gap: 20px; font-size: 13.5px; color: var(--muted); }
+  footer .links a:hover { color: var(--text); }
+  footer .copy { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap row">
+    <div class="wordmark">Fast<span>VPN</span></div>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#servers">Servers</a>
+      <a href="#how">How it works</a>
+    </div>
+    <a class="nav-cta" id="navCta" href="#">Get the app</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap hero-grid">
+    <div>
+      <div class="live-pill">
+        <span class="live-dot pulse"></span>
+        <span id="livePillText">Checking live network…</span>
+      </div>
+      <h1>Connect anywhere. Actually fast.</h1>
+      <p class="lead">FastVPN routes your traffic through encrypted WireGuard tunnels across a growing set of servers around the world — one tap to connect, no logs kept.</p>
+      <div class="cta-row">
+        <a class="btn-primary" id="heroCta" href="#">Get it on Google Play</a>
+        <a class="btn-secondary" href="#how">See how it works</a>
+      </div>
+    </div>
+    <div class="map-wrap">
+      <svg viewBox="0 0 400 260" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <g class="map-line">
+          <line x1="120" y1="90" x2="210" y2="60"/>
+          <line x1="210" y1="60" x2="300" y2="110"/>
+          <line x1="120" y1="90" x2="150" y2="170"/>
+          <line x1="210" y1="60" x2="260" y2="180"/>
+          <line x1="300" y1="110" x2="330" y2="190"/>
+          <line x1="150" y1="170" x2="260" y2="180"/>
+        </g>
+        <g id="mapDots">
+          <circle class="map-dot on pulse" cx="120" cy="90" r="5"/>
+          <circle class="map-dot on" cx="210" cy="60" r="5"/>
+          <circle class="map-dot on" cx="300" cy="110" r="5"/>
+          <circle class="map-dot" cx="150" cy="170" r="5"/>
+          <circle class="map-dot on" cx="260" cy="180" r="5"/>
+          <circle class="map-dot" cx="330" cy="190" r="5"/>
+          <circle class="map-dot" cx="70" cy="150" r="5"/>
+          <circle class="map-dot" cx="350" cy="70" r="5"/>
+        </g>
+      </svg>
+    </div>
+  </div>
+</header>
+
+<section id="features" class="eyebrow-free">
+  <div class="wrap">
+    <h2>Built to disappear into the background</h2>
+    <p class="section-lead">No fuss, no slowdown, no record of what you did.</p>
+
+    <div class="feature-row">
+      <h3>WireGuard, not legacy VPN protocols</h3>
+      <p>Modern, lean tunnel protocol — noticeably faster handshakes and better battery life than OpenVPN or IPSec on mobile.</p>
+    </div>
+    <div class="feature-row">
+      <h3>Nothing logged, nothing to hand over</h3>
+      <p>We don't keep browsing history, connection logs, or traffic records tied to your identity — there's simply nothing to request.</p>
+    </div>
+    <div class="feature-row">
+      <h3>Servers picked for you automatically</h3>
+      <p>The app finds you a nearby, uncongested server on connect. If one goes down, it fails over to another without you noticing.</p>
+    </div>
+    <div class="feature-row">
+      <h3>One tap, every time</h3>
+      <p>No accounts to manage, no configuration files to import. Install, tap connect, done.</p>
+    </div>
+  </div>
+</section>
+
+<section id="servers">
+  <div class="wrap">
+    <h2 style="font-size:28px; margin-bottom: 10px;">Live network</h2>
+    <p class="section-lead">Real numbers, pulled straight from our infrastructure right now.</p>
+    <div class="live-pill" style="margin-bottom:0;">
+      <span class="live-dot pulse"></span>
+      <span id="liveStatsText">Loading…</span>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2 style="font-size:28px; margin-bottom: 40px;">Three steps, that's it</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="num">01</div>
+        <h3>Install</h3>
+        <p>Get FastVPN from Google Play — no sign-up screen in the way.</p>
+      </div>
+      <div class="step">
+        <div class="num">02</div>
+        <h3>Tap connect</h3>
+        <p>The app assigns you a server and opens an encrypted tunnel in seconds.</p>
+      </div>
+      <div class="step">
+        <div class="num">03</div>
+        <h3>Browse normally</h3>
+        <p>Everything routes through the tunnel from that point on. Tap again to disconnect.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap row">
+    <div class="copy">© <span id="year"></span> FastVPN</div>
+    <div class="links">
+      <a href="/privacy.html">Privacy</a>
+      <a href="/terms.html">Terms</a>
+    </div>
+  </div>
+</footer>
+
+<script type="module">
+  // TODO: replace with the real Google Play Store listing URL once published.
+  const PLAY_STORE_URL = "#";
+  const hasRealLink = PLAY_STORE_URL !== "#";
+
+  document.getElementById('year').textContent = new Date().getFullYear();
+
+  [document.getElementById('navCta'), document.getElementById('heroCta')].forEach((el) => {
+    if (hasRealLink) {
+      el.href = PLAY_STORE_URL;
+      el.target = '_blank';
+      el.rel = 'noopener';
+    } else {
+      el.href = '#';
+      el.classList.add('disabled');
+      el.textContent = 'Coming soon to Google Play';
+      el.addEventListener('click', (e) => e.preventDefault());
+    }
+  });
+
+  // Real, live data from the same public endpoint the app itself calls --
+  // not a placeholder stat. Fails quietly to a static line if unreachable.
+  fetch('/api/servers')
+    .then((r) => r.json())
+    .then((servers) => {
+      const countries = new Set(servers.map((s) => s.countryCode)).size;
+      const liveText = servers.length === 0
+        ? 'Network coming online — check back shortly'
+        : `${servers.length} server${servers.length === 1 ? '' : 's'} live across ${countries} ${countries === 1 ? 'country' : 'countries'}`;
+      document.getElementById('livePillText').textContent = liveText;
+      document.getElementById('liveStatsText').textContent = liveText;
+    })
+    .catch(() => {
+      document.getElementById('livePillText').textContent = 'FastVPN network';
+      document.getElementById('liveStatsText').textContent = 'Live status temporarily unavailable';
+    });
+</script>
+
+</body>
+</html>

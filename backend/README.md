@@ -99,7 +99,14 @@ in-app admin UI.
 
 ## Watching it live: the dashboard
 
-Open `http://<brain-vps-ip>:8080/` in **your phone's browser** — no
+The domain root (`/`) is now a public marketing page for the app itself --
+what a visitor sees if they land on your domain. The admin panel moved to
+`/adminui` so it isn't the first thing a stranger sees. Update the
+`PLAY_STORE_URL` constant near the bottom of `api/public/index.html` once
+your Play Store listing is live -- until then the button shows "Coming soon".
+
+Open `http://<brain-vps-ip>:8080/adminui` (or `https://yourdomain/adminui` if
+you've set up a domain) in **your phone's browser** — no
 terminal, no `curl`. Log in with the admin key from Step 1 (it remembers it
 after that) and you'll see:
 
