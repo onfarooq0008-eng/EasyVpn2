@@ -152,10 +152,6 @@
   let refreshTimer = null;
   let lastData = { servers: [] };
 
-  if (adminKey) {
-    showDashboard();
-  }
-
   window.login = function () {
     const input = document.getElementById('adminKeyInput').value.trim();
     if (!input) return;
@@ -412,6 +408,14 @@
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  // Auto-login on page load/refresh if a key is already saved. This must run
+  // after every function above is defined (showDashboard -> startPolling ->
+  // refresh), otherwise a page refresh with a saved key throws
+  // "refresh is not defined" before window.refresh has been assigned.
+  if (adminKey) {
+    showDashboard();
   }
 </script>
 
