@@ -22,6 +22,7 @@
     <color name="divider">#E9EEF5</color>
     <color name="mutedOnPrimary">#CFE1FF</color>
     <color name="launcherBackground">#00091F</color>
+    <color name="launcherIconBg">#FDFEFF</color>
     <color name="surfaceSoft">#EEF4FF</color>
     <color name="heroGlow">#2A78EE</color>
 </resources>

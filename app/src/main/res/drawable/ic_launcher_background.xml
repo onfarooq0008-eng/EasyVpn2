@@ -1,10 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Same gradient as the in-app hero card (see drawable/bg_hero.xml) so the
-     launcher icon and splash screen match the connect screen you see right
-     after opening the app. -->
+<!-- Plain fill matching the new shield/lock logo's own card backdrop, so the
+     adaptive-icon background never shows a seam around the foreground artwork
+     regardless of the launcher's mask shape (circle, squircle, rounded square). -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
-    <gradient
-        android:angle="135"
-        android:startColor="@color/heroStart"
-        android:endColor="@color/heroEnd" />
+    <solid android:color="@color/launcherIconBg" />
 </shape>
