@@ -44,11 +44,13 @@ DOMAIN=""
 CF_CERT=""
 CF_KEY=""
 CF_ONLY=0
+BRAIN_IP=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --role) ROLE="$2"; shift 2 ;;
     --api-url) API_URL="$2"; shift 2 ;;
+    --brain-ip) BRAIN_IP="$2"; shift 2 ;;
     --admin-key) ADMIN_KEY="$2"; shift 2 ;;
     --country) COUNTRY_NAME="$2"; shift 2 ;;
     --country-code) COUNTRY_CODE="$2"; shift 2 ;;
@@ -78,7 +80,11 @@ if [[ "$ROLE" != "api" && "$ROLE" != "node" ]]; then
   echo "Usage:"
   echo "  sudo bash setup.sh --role api"
   echo "  sudo bash setup.sh --role api --domain api.yourdomain.com [--cf-cert <path>] [--cf-key <path>] [--cf-only]"
-  echo "  sudo bash setup.sh --role node --api-url <url> --admin-key <key> --country <name> --country-code <cc> [--city <city>] [--name <name>]"
+  echo "  sudo bash setup.sh --role node --api-url <url> --admin-key <key> --country <name> --country-code <cc> [--city <city>] [--name <name>] [--brain-ip <ip>]"
+  echo ""
+  echo "  --brain-ip is required when --api-url is a domain name (e.g. behind"
+  echo "  Cloudflare) rather than a raw IP -- pass the brain VPS's real public"
+  echo "  IPv4, found by running 'curl -s -4 ifconfig.me' on the brain VPS."
   exit 1
 fi
 
@@ -601,17 +607,29 @@ if ! curl -s -f -H "X-Api-Key: ${AGENT_API_KEY}" "http://localhost:${AGENT_PORT}
 fi
 echo "==> Verified: the agent is running and responding."
 
-# Restrict the agent port to ONLY the brain API's IP, extracted from --api-url,
-# rather than opening it to the whole internet -- nobody else has any reason
-# to reach this port, and it accepts commands that add WireGuard peers.
+# Restrict the agent port to ONLY the brain API's IP, rather than opening it
+# to the whole internet -- nobody else has any reason to reach this port,
+# and it accepts commands that add WireGuard peers.
+#
+# If --api-url is a raw IP (http://1.2.3.4:8080), that IP is what's allowed.
+# If --api-url is a domain (e.g. behind Cloudflare, like https://api.example.com),
+# the domain can't be used directly: resolving it would give Cloudflare's edge
+# IP, not your actual brain server -- and agent<->brain calls go direct,
+# bypassing Cloudflare entirely. In that case --brain-ip must be given
+# explicitly with the brain VPS's real public IPv4.
 BRAIN_HOST=$(echo "${API_URL}" | sed -E 's#^[a-zA-Z]+://##; s#[:/].*$##')
-if [[ -n "$BRAIN_HOST" ]] && [[ "$BRAIN_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  ufw allow from "${BRAIN_HOST}" to any port ${AGENT_PORT} proto tcp
+if [[ "$BRAIN_HOST" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  ALLOWED_IP="$BRAIN_HOST"
+elif [[ -n "$BRAIN_IP" ]] && [[ "$BRAIN_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  ALLOWED_IP="$BRAIN_IP"
 else
-  echo "ERROR: API URL host must be an IPv4 address for the agent firewall allow-list: $API_URL"
-  echo "Refusing to expose port ${AGENT_PORT} publicly."
+  echo "ERROR: --api-url uses a domain name (${BRAIN_HOST}), so the agent"
+  echo "firewall can't tell which IP is allowed to reach it from that alone."
+  echo "Pass the brain VPS's real public IPv4 explicitly with --brain-ip <IP>."
+  echo "Find it by running this ON THE BRAIN VPS: curl -s -4 ifconfig.me"
   exit 1
 fi
+ufw allow from "${ALLOWED_IP}" to any port ${AGENT_PORT} proto tcp
 
 MY_IP=$(curl -s -4 ifconfig.me)
 AGENT_URL="http://${MY_IP}:${AGENT_PORT}"
