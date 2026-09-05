@@ -111,7 +111,7 @@
   </div>
 
   <div class="card">
-    <input id="searchBox" type="text" placeholder="Search by name, country, or city..." oninput="renderDashboard(lastData)">
+    <input id="searchBox" type="text" placeholder="Search by name, country, or city..." oninput="onSearchInput()">
     <div id="serverList"></div>
     <div id="emptyMsg" class="empty-msg hidden">No VPS registered yet. Run setup.sh --role node on one to see it here.</div>
   </div>
@@ -237,6 +237,13 @@
       document.getElementById('lastUpdated').textContent = 'Could not reach the API just now -- will retry.';
     }
   }
+
+  // Inline oninput="" attributes run in the global scope, not the module
+  // scope, so they can't see module-scoped `renderDashboard`/`lastData`
+  // directly -- this wrapper is what gets attached to window instead.
+  window.onSearchInput = function () {
+    renderDashboard(lastData);
+  };
 
   function renderDashboard(data) {
     document.getElementById('statServers').textContent = data.totalServers;

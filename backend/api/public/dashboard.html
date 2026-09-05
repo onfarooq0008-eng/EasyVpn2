@@ -108,7 +108,7 @@
   </div>
 
   <div class="card">
-    <input id="searchBox" type="text" placeholder="Search by name, country, or city..." oninput="renderDashboard(lastData)">
+    <input id="searchBox" type="text" placeholder="Search by name, country, or city..." oninput="onSearchInput()">
     <div id="serverList"></div>
     <div id="emptyMsg" class="empty-msg hidden">No VPS registered yet. Run setup.sh --role node on one to see it here.</div>
   </div>
@@ -127,10 +127,6 @@
   let adminKey = localStorage.getItem('fastvpn_admin_key') || '';
   let refreshTimer = null;
   let lastData = { servers: [] };
-
-  if (adminKey) {
-    showDashboard();
-  }
 
   window.login = function () {
     const input = document.getElementById('adminKeyInput').value.trim();
@@ -190,6 +186,13 @@
       document.getElementById('lastUpdated').textContent = 'Could not reach the API just now -- will retry.';
     }
   }
+
+  // Inline oninput="" attributes run in the global scope, not the module
+  // scope, so they can't see module-scoped `renderDashboard`/`lastData`
+  // directly -- this wrapper is what gets attached to window instead.
+  window.onSearchInput = function () {
+    renderDashboard(lastData);
+  };
 
   function renderDashboard(data) {
     document.getElementById('statServers').textContent = data.totalServers;
@@ -312,6 +315,14 @@
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  // Auto-login on page load/refresh if a key is already saved. This must run
+  // after every function above is defined (showDashboard -> refresh),
+  // otherwise a page refresh with a saved key throws "refresh is not
+  // defined" before window.refresh has been assigned.
+  if (adminKey) {
+    showDashboard();
   }
 </script>
 
